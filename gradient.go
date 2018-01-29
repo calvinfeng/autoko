@@ -1,15 +1,25 @@
 package main
 
 import (
+	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"math"
+	"os"
 )
 
 // Gradient is a vector which has vertical and horizontal component. It also contains a directional component that is
 // quantized to be one of the eight possible choices (N, NE, E, SE, S, SW, W, NW).
 type Gradient struct {
-	Y   float64
-	X   float64
-	Dir string
+	Y          float64
+	X          float64
+	Dir        string
+	IsLocalMax bool
+}
+
+func (g *Gradient) Magnitude() float64 {
+	return math.Sqrt(g.X*g.X + g.Y*g.Y)
 }
 
 const (
@@ -30,14 +40,115 @@ var Gx = [][]float64{
 	{-1.0, 0.0, 1.0},
 }
 
-// Gy is the sobel operator in the y-direction
+// Gy is the Sobel operator in the y-direction
 var Gy = [][]float64{
 	{1.0, 2.0, 1.0},
 	{0.0, 0.0, 0.0},
 	{-1.0, -2.0, -1.0},
 }
 
-func GetImageGradient(grid [][]float64, y, x int) (*Gradient, error) {
+func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Image) {
+	maxPoint := img.Bounds().Max
+	minPoint := img.Bounds().Min
+
+	pixelGrid := make([][]float64, maxPoint.Y)
+	for i := minPoint.Y; i < maxPoint.Y; i += 1 {
+		pixelGrid[i] = make([]float64, maxPoint.X)
+		for j := minPoint.X; j < maxPoint.X; j += 1 {
+			pixelGrid[i][j] = RGBTo8BitGrayScale(img.At(j, i))
+		}
+	}
+
+	gaussMask := ApplyGaussianMask(pixelGrid)
+
+	mask, err := ApplyGradientMask(gaussMask)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	newImage := image.NewNRGBA(img.Bounds())
+	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
+		for x := minPoint.X; x < maxPoint.X; x += 1 {
+			grad := mask[y][x]
+			if grad.IsLocalMax {
+				newImage.Set(x, y, color.NRGBA{255, 0, 0, 255})
+			} else {
+				newImage.Set(x, y, img.At(x, y))
+			}
+		}
+	}
+
+	outputFile, fileErr := os.Create(fmt.Sprintf("%s/%s_edge_detection.png", outputDir, imageName))
+	if fileErr != nil {
+		fmt.Println("Cannot create image")
+	} else {
+		png.Encode(outputFile, newImage)
+		outputFile.Close()
+	}
+}
+
+func ApplyGradientMask(grid [][]float64) ([][]*Gradient, error) {
+	mask := make([][]*Gradient, len(grid))
+	for i := 0; i < len(grid); i += 1 {
+		mask[i] = make([]*Gradient, len(grid[i]))
+		for j := 0; j < len(grid[i]); j += 1 {
+			grad, err := ComputeGradient(grid, i, j)
+			if err != nil {
+				return nil, err
+			}
+
+			mask[i][j] = grad
+		}
+	}
+
+	// Apply maximum suppression on mask[i][j]
+	for i := 0; i < len(grid); i += 1 {
+		for j := 0; j < len(grid[i]); j += 1 {
+			var forwardPos, backwardPos *Position
+			switch mask[i][j].Dir {
+			case E:
+				forwardPos = &Position{i, j + 1}
+				backwardPos = &Position{i, j - 1}
+			case NE:
+				forwardPos = &Position{i - 1, j + 1}
+				backwardPos = &Position{i + 1, j - 1}
+			case N:
+				forwardPos = &Position{i - 1, j}
+				backwardPos = &Position{i + 1, j}
+			case NW:
+				forwardPos = &Position{i - 1, j - 1}
+				backwardPos = &Position{i + 1, j + 1}
+			case W:
+				forwardPos = &Position{i, j - 1}
+				backwardPos = &Position{i, j + 1}
+			case SW:
+				forwardPos = &Position{i + 1, j - 1}
+				backwardPos = &Position{i - 1, j + 1}
+			case S:
+				forwardPos = &Position{i + 1, j}
+				backwardPos = &Position{i - 1, j}
+			case SE:
+				forwardPos = &Position{i + 1, j + 1}
+				backwardPos = &Position{i - 1, j - 1}
+			default:
+				forwardPos = &Position{i, j}
+				backwardPos = &Position{i, j}
+			}
+
+			if forwardPos.IsOutOfBound(len(grid), len(grid[i])) || backwardPos.IsOutOfBound(len(grid), len(grid[i])) {
+				mask[i][j].IsLocalMax = false
+			} else {
+				mask[i][j].IsLocalMax = mask[forwardPos.I][forwardPos.J].Magnitude() < mask[i][j].Magnitude() &&
+					mask[backwardPos.I][backwardPos.J].Magnitude() < mask[i][j].Magnitude()
+			}
+		}
+	}
+
+	return mask, nil
+}
+
+func ComputeGradient(grid [][]float64, y, x int) (*Gradient, error) {
 	grad := &Gradient{
 		X: 0.0,
 		Y: 0.0,
@@ -56,13 +167,14 @@ func GetImageGradient(grid [][]float64, y, x int) (*Gradient, error) {
 			}
 
 			if !outOfBound {
-				grad.Y += Gy[i][j] * grid[i][j]
-				grad.X += Gx[i][j] * grid[i][j]
+				grad.Y += Gy[i][j] * grid[i+y-1][j+x-1]
+				grad.X += Gx[i][j] * grid[i+y-1][j+x-1]
 			}
 		}
 	}
 
-	// When X is zero, we have a division by zero case here.
+	// When X is zero, we have a division by zero case here. Sometimes gradient can be zero when there is absolutely no
+	// change within the local region.
 	if grad.X == 0.0 {
 		if grad.Y > 0.0 {
 			grad.Dir = N
