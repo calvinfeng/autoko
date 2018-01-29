@@ -53,6 +53,41 @@ func ApplyGaussianMask(grid [][]float64) [][]float64 {
 	return maskedGrid
 }
 
+func ApplyPartialGaussianMask(grid [][]float64, startRow, rowsPerRoutine int, output chan [][]float64) {
+	partialMask := make([][]float64, rowsPerRoutine)
+	for i := 0; i < rowsPerRoutine; i += 1 {
+		partialMask[i] = make([]float64, len(grid[i+startRow]))
+		for j := 0; j < len(grid[i+startRow]); j += 1 {
+			partialMask[i][j] = Convolve(i+startRow, j, grid, GaussianMask)
+		}
+	}
+
+	output <- partialMask
+}
+
+func ApplyGaussianMaskOptimized(grid [][]float64) [][]float64 {
+	numOfRoutines := 32
+	rowsPerRoutine := len(grid) / numOfRoutines
+	outputChan := make(chan [][]float64, numOfRoutines)
+	startRow := 0
+
+	for n := 1; n < numOfRoutines; n += 1 {
+		go ApplyPartialGaussianMask(grid, startRow, rowsPerRoutine, outputChan)
+		startRow += rowsPerRoutine
+	}
+	go ApplyPartialGaussianMask(grid, startRow, len(grid)-startRow, outputChan)
+
+	mask := make([][]float64, len(grid))
+	for partialResult := range outputChan {
+		mask = append(mask, partialResult...)
+		if len(mask) > len(grid) {
+			break
+		}
+	}
+
+	return mask
+}
+
 func CreateGaussianBlurImage(outputDir string, imageName string, img image.Image) {
 	maxPoint := img.Bounds().Max
 	minPoint := img.Bounds().Min
@@ -65,18 +100,30 @@ func CreateGaussianBlurImage(outputDir string, imageName string, img image.Image
 		}
 	}
 
-	maskedGrid := ApplyGaussianMask(pixelGrid)
+	maskedGrid := ApplyGaussianMaskOptimized(pixelGrid)
 
 	newImage := image.NewGray(img.Bounds())
-	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
-		for x := minPoint.X; x < maxPoint.X; x += 1 {
+	for y := 0; y < len(maskedGrid); y += 1 {
+		for x := 0; x < len(maskedGrid[y]); x += 1 {
 			val := maskedGrid[y][x]
 			if val < 0.0 {
 				val = 0.0
 			}
+
 			newImage.Set(x, y, color.Gray{uint8(val)})
 		}
 	}
+
+	//newImage := image.NewGray(img.Bounds())
+	//for y := minPoint.Y; y < maxPoint.Y; y += 1 {
+	//	for x := minPoint.X; x < maxPoint.X; x += 1 {
+	//		val := maskedGrid[y][x]
+	//		if val < 0.0 {
+	//			val = 0.0
+	//		}
+	//		newImage.Set(x, y, color.Gray{uint8(val)})
+	//	}
+	//}
 
 	outputFile, fileErr := os.Create(fmt.Sprintf("%s/%s_gaussian_blur.png", outputDir, imageName))
 	if fileErr != nil {

@@ -23,8 +23,8 @@ func main() {
 		fmt.Printf("Rectangle %v\n", img.Bounds())
 
 		start := time.Now()
-		// CreateGaussianBlurImage("maps", name, img)
-		CreateEdgeDetectionImage("maps", name, img)
+		CreateGaussianBlurImage("maps", name, img)
+		// CreateEdgeDetectionImage("maps", name, img)
 		end := time.Now()
 
 		fmt.Printf("Algorithm took %v time\n", end.Sub(start))
