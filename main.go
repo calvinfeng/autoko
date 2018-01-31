@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"image"
 	"os"
+	"time"
 )
 
 func main() {
-	reader, err := os.Open("maps/fetch_office.png")
+	reader, err := os.Open("maps/caterpillar.png")
 	if err != nil {
 		fmt.Println("Error", err)
 	}
@@ -19,8 +20,13 @@ func main() {
 		fmt.Println("Decoding has error", decodeErr)
 	} else {
 		fmt.Printf("Successfully decoded %s\n", name)
-		fmt.Printf("Rectangle %v\n", img.Bounds())
-		CreateGaussianBlurImage("maps", name, img)
-		// CreateEdgeDetectionImage("maps", name, img)
+		fmt.Printf("Loaded image has the following dimension: %v\n", img.Bounds())
+
+		start := time.Now()
+		// CreateGaussianBlurImage("maps", name, img)
+		CreateEdgeDetectionImage("maps", name, img)
+		end := time.Now()
+
+		fmt.Printf("Algorithm took %v to complete \n", end.Sub(start))
 	}
 }

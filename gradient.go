@@ -47,6 +47,12 @@ var Gy = [][]float64{
 	{-1.0, -2.0, -1.0},
 }
 
+type PartialGradientMask struct {
+	Order    int
+	StartRow int
+	Values   [][]*Gradient
+}
+
 func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Image) {
 	maxPoint := img.Bounds().Max
 	minPoint := img.Bounds().Min
@@ -59,18 +65,14 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 		}
 	}
 
-	gaussMask := ApplyGaussianMask(pixelGrid)
-
-	mask, err := ApplyGradientMask(gaussMask)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	gaussMask := GetGaussianMaskOptimized(pixelGrid)
+	gradMask := GetGradientMaskOptimized(gaussMask)
+	MaximumSuppression(gradMask)
 
 	newImage := image.NewNRGBA(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
 		for x := minPoint.X; x < maxPoint.X; x += 1 {
-			grad := mask[y][x]
+			grad := gradMask[y][x]
 			if grad.IsLocalMax {
 				newImage.Set(x, y, color.NRGBA{255, 0, 0, 255})
 			} else {
@@ -88,23 +90,69 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 	}
 }
 
-func ApplyGradientMask(grid [][]float64) ([][]*Gradient, error) {
+func GetGradientMask(grid [][]float64) [][]*Gradient {
 	mask := make([][]*Gradient, len(grid))
 	for i := 0; i < len(grid); i += 1 {
 		mask[i] = make([]*Gradient, len(grid[i]))
 		for j := 0; j < len(grid[i]); j += 1 {
-			grad, err := ComputeGradient(grid, i, j)
-			if err != nil {
-				return nil, err
-			}
-
-			mask[i][j] = grad
+			mask[i][j] = computeGradient(grid, i, j)
 		}
 	}
 
-	// Apply maximum suppression on mask[i][j]
-	for i := 0; i < len(grid); i += 1 {
-		for j := 0; j < len(grid[i]); j += 1 {
+	return mask
+}
+
+func getPartialGradientMask(grid [][]float64, n, startRow, endRow int, output chan *PartialGradientMask) {
+	rowSize := endRow - startRow
+	values := make([][]*Gradient, rowSize)
+	for i := 0; i < rowSize; i += 1 {
+		colSize := len(grid[startRow+i])
+		values[i] = make([]*Gradient, colSize)
+		for j := 0; j < colSize; j += 1 {
+			values[i][j] = computeGradient(grid, startRow+i, j)
+		}
+	}
+
+	output <- &PartialGradientMask{
+		Order:    n,
+		StartRow: startRow,
+		Values:   values,
+	}
+}
+
+func GetGradientMaskOptimized(grid [][]float64) [][]*Gradient {
+	numOfRoutines := 32
+	rowsPerRoutine := len(grid) / numOfRoutines
+	outputChan := make(chan *PartialGradientMask, numOfRoutines)
+
+	n := 0
+	for n < numOfRoutines-1 {
+		go getPartialGradientMask(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
+		n += 1
+	}
+	go getPartialGradientMask(grid, n, n*rowsPerRoutine, len(grid), outputChan)
+
+	n = 0
+	partialMasks := make([]*PartialGradientMask, numOfRoutines)
+	for partialMask := range outputChan {
+		partialMasks[partialMask.Order] = partialMask
+		n += 1
+		if n == numOfRoutines {
+			break
+		}
+	}
+
+	mask := [][]*Gradient{}
+	for _, partialMask := range partialMasks {
+		mask = append(mask, partialMask.Values...)
+	}
+
+	return mask
+}
+
+func MaximumSuppression(mask [][]*Gradient) {
+	for i := 0; i < len(mask); i += 1 {
+		for j := 0; j < len(mask[i]); j += 1 {
 			var forwardPos, backwardPos *Position
 			switch mask[i][j].Dir {
 			case E:
@@ -136,7 +184,7 @@ func ApplyGradientMask(grid [][]float64) ([][]*Gradient, error) {
 				backwardPos = &Position{i, j}
 			}
 
-			if forwardPos.IsOutOfBound(len(grid), len(grid[i])) || backwardPos.IsOutOfBound(len(grid), len(grid[i])) {
+			if forwardPos.IsOutOfBound(len(mask), len(mask[i])) || backwardPos.IsOutOfBound(len(mask), len(mask[i])) {
 				mask[i][j].IsLocalMax = false
 			} else {
 				mask[i][j].IsLocalMax = mask[forwardPos.I][forwardPos.J].Magnitude() < mask[i][j].Magnitude() &&
@@ -144,11 +192,9 @@ func ApplyGradientMask(grid [][]float64) ([][]*Gradient, error) {
 			}
 		}
 	}
-
-	return mask, nil
 }
 
-func ComputeGradient(grid [][]float64, y, x int) (*Gradient, error) {
+func computeGradient(grid [][]float64, y, x int) *Gradient {
 	grad := &Gradient{
 		X: 0.0,
 		Y: 0.0,
@@ -182,7 +228,7 @@ func ComputeGradient(grid [][]float64, y, x int) (*Gradient, error) {
 			grad.Dir = S
 		}
 
-		return grad, nil
+		return grad
 	}
 
 	angle := math.Atan2(grad.Y, grad.X)
@@ -233,9 +279,7 @@ func ComputeGradient(grid [][]float64, y, x int) (*Gradient, error) {
 		} else {
 			grad.Dir = E
 		}
-	default:
-		return nil, MathError{"Cannot find the appropriate quadrant to determine direction of this vector."}
 	}
 
-	return grad, nil
+	return grad
 }

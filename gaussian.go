@@ -6,10 +6,9 @@ import (
 	"image/color"
 	"image/png"
 	"os"
-	"time"
 )
 
-var GaussianMask = [][]float64{
+var GaussianKernel = [][]float64{
 	{2.0, 4.0, 5.0, 4.0, 2.0},
 	{4.0, 9.0, 12.0, 9.0, 4.0},
 	{5.0, 12.0, 15.0, 12.0, 5.0},
@@ -17,14 +16,15 @@ var GaussianMask = [][]float64{
 	{2.0, 4.0, 5.0, 4.0, 2.0},
 }
 
-type PartialMask struct {
+type PartialGaussianMask struct {
 	Order    int
-	Values   [][]float64
 	StartRow int
+	Values   [][]float64
 }
 
-// Convolve will assume zero padding
-func Convolve(y, x int, grid [][]float64, kernel [][]float64) float64 {
+// Convolve assumes zero padding, i.e. if it is being operated on the corner of a grid, everything that is out of bound
+// is assumed to be zero valued.
+func convolve(grid [][]float64, y, x int, kernel [][]float64) float64 {
 	kernelNorm, sum := 0.0, 0.0
 	for i := 0; i < 5; i += 1 {
 		for j := 0; j < 5; j += 1 {
@@ -48,50 +48,52 @@ func Convolve(y, x int, grid [][]float64, kernel [][]float64) float64 {
 	return sum / kernelNorm
 }
 
-func ApplyGaussianMask(grid [][]float64) [][]float64 {
+func GetGaussianMask(grid [][]float64) [][]float64 {
 	maskedGrid := make([][]float64, len(grid))
 	for i := 0; i < len(grid); i += 1 {
 		maskedGrid[i] = make([]float64, len(grid[i]))
 		for j := 0; j < len(grid[i]); j += 1 {
-			maskedGrid[i][j] = Convolve(i, j, grid, GaussianMask)
+			maskedGrid[i][j] = convolve(grid, i, j, GaussianKernel)
 		}
 	}
 
 	return maskedGrid
 }
 
-func ApplyPartialGaussianMask(grid [][]float64, n, startRow, endRow int, output chan *PartialMask) {
+// getPartialGaussianMask is called in the optimized version of gaussian masking. It is called in multiple go routines
+// to achieve parallelism of convolution operation.
+func getPartialGaussianMask(grid [][]float64, n, startRow, endRow int, output chan *PartialGaussianMask) {
 	rowSize := endRow - startRow
 	values := make([][]float64, rowSize)
 	for i := 0; i < rowSize; i += 1 {
 		colSize := len(grid[startRow+i])
 		values[i] = make([]float64, colSize)
 		for j := 0; j < colSize; j += 1 {
-			values[i][j] = Convolve(startRow+i, j, grid, GaussianMask)
+			values[i][j] = convolve(grid, startRow+i, j, GaussianKernel)
 		}
 	}
 
-	output <- &PartialMask{
+	output <- &PartialGaussianMask{
 		Order:    n,
-		Values:   values,
 		StartRow: startRow,
+		Values:   values,
 	}
 }
 
-func ApplyGaussianMaskOptimized(grid [][]float64) [][]float64 {
+func GetGaussianMaskOptimized(grid [][]float64) [][]float64 {
 	numOfRoutines := 32
 	rowsPerRoutine := len(grid) / numOfRoutines
-	outputChan := make(chan *PartialMask, numOfRoutines)
+	outputChan := make(chan *PartialGaussianMask, numOfRoutines)
 
 	n := 0
 	for n < numOfRoutines-1 {
-		go ApplyPartialGaussianMask(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
+		go getPartialGaussianMask(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
 		n += 1
 	}
-	go ApplyPartialGaussianMask(grid, n, n*rowsPerRoutine, len(grid), outputChan)
+	go getPartialGaussianMask(grid, n, n*rowsPerRoutine, len(grid), outputChan)
 
 	n = 0
-	partialMasks := make([]*PartialMask, numOfRoutines)
+	partialMasks := make([]*PartialGaussianMask, numOfRoutines)
 	for partialMask := range outputChan {
 		partialMasks[partialMask.Order] = partialMask
 		n += 1
@@ -120,10 +122,7 @@ func CreateGaussianBlurImage(outputDir string, imageName string, img image.Image
 		}
 	}
 
-	start := time.Now()
-	maskedGrid := ApplyGaussianMaskOptimized(pixelGrid)
-	end := time.Now()
-	fmt.Printf("Algorithm took %v time\n", end.Sub(start))
+	maskedGrid := GetGaussianMaskOptimized(pixelGrid)
 
 	newImage := image.NewGray(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
