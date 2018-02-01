@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	reader, err := os.Open("maps/caterpillar.png")
+	reader, err := os.Open("maps/fetch_office.png")
 	if err != nil {
 		fmt.Println("Error", err)
 	}
