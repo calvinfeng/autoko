@@ -15,7 +15,7 @@ func CreateSubtractMeanImage(outputDir string, imageName string, img image.Image
 	mean := 0.0
 	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
 		for x := minPoint.X; x < maxPoint.X; x += 1 {
-			mean += RGBTo8BitGrayScale(img.At(x, y))
+			mean += RGBTo8BitGrayScaleIntensity(img.At(x, y))
 		}
 	}
 	mean = mean / float64(maxPoint.Y*maxPoint.X)
@@ -23,7 +23,7 @@ func CreateSubtractMeanImage(outputDir string, imageName string, img image.Image
 	newImage := image.NewGray(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
 		for x := minPoint.X; x < maxPoint.X; x += 1 {
-			val := RGBTo8BitGrayScale(img.At(x, y)) - mean
+			val := RGBTo8BitGrayScaleIntensity(img.At(x, y)) - mean
 			if val < 0.0 {
 				val = 0.0
 			}
@@ -48,7 +48,7 @@ func CreateColorfulImage(outputDir string, imageName string, img image.Image) {
 	newImage := image.NewRGBA(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
 		for x := minPoint.X; x < maxPoint.X; x += 1 {
-			val := RGBTo8BitGrayScale(img.At(x, y))
+			val := RGBTo8BitGrayScaleIntensity(img.At(x, y))
 			if val > 100 {
 				newImage.Set(x, y, color.RGBA{0, 0, 0, 255})
 			} else {

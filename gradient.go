@@ -61,7 +61,7 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 	for i := minPoint.Y; i < maxPoint.Y; i += 1 {
 		pixelGrid[i] = make([]float64, maxPoint.X)
 		for j := minPoint.X; j < maxPoint.X; j += 1 {
-			pixelGrid[i][j] = RGBTo8BitGrayScale(img.At(j, i))
+			pixelGrid[i][j] = RGBTo8BitGrayScaleIntensity(img.At(j, i))
 		}
 	}
 
