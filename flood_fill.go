@@ -52,37 +52,27 @@ func FloodFillFromTopLeftCorner(grid [][]float64) [][]float64 {
 		copy(mask[i], grid[i])
 	}
 
-	// Start flood fill from top-left corner
-	// startRow, startCol, distance := 0, 0, 5
-	// sourceValue := grid[startRow][startCol]
-	// targetValue := 255.0
-	// floodFill(startRow, startCol, distance, grid, mask, visitRecord, sourceValue, targetValue)
-	startCoor := &Coor{0, 0}
+	startCoord := &Coordinate{0, 0}
 	distance := 5
-	sourceValue := grid[startCoor.I][startCoor.J]
+	sourceValue := grid[startCoord.I][startCoord.J]
 	targetValue := 255.0
-	breadthFirstFloodFill(startCoor, distance, grid, mask, visitRecord, sourceValue, targetValue)
+	breadthFirstFloodFill(startCoord, distance, grid, mask, visitRecord, sourceValue, targetValue)
 
 	return mask
 }
 
-type Coor struct {
-	I int
-	J int
-}
-
-func breadthFirstFloodFill(c *Coor, dist int, grid, mask [][]float64, visitRecord [][]bool, srcVal, targetVal float64) {
-	queue := []*Coor{c}
+func breadthFirstFloodFill(c *Coordinate, dist int, grid, mask [][]float64, visitRecord [][]bool, srcVal, targetVal float64) {
+	queue := []*Coordinate{c}
+	// Once it goes into the queue, mark it as visited and modify the mask right away.
+	mask[c.I][c.J] = targetVal
+	visitRecord[c.I][c.J] = true
 	for len(queue) > 0 {
-		coor := queue[0]
-		visitRecord[coor.I][coor.J] = true
-		mask[coor.I][coor.J] = targetVal
+		coord := queue[0]
 		queue = queue[1:]
-
 		// Expand to neighboring pixels only if the current pixel on the grid matches the source value
-		if grid[coor.I][coor.J] == srcVal {
-			for i := coor.I - dist; i <= coor.I+dist; i += 1 {
-				for j := coor.J - dist; j <= coor.J+dist; j += 1 {
+		if grid[coord.I][coord.J] == srcVal {
+			for i := coord.I - dist; i <= coord.I+dist; i += 1 {
+				for j := coord.J - dist; j <= coord.J+dist; j += 1 {
 					if i < 0 || i >= len(grid) {
 						continue
 					}
@@ -95,41 +85,14 @@ func breadthFirstFloodFill(c *Coor, dist int, grid, mask [][]float64, visitRecor
 						continue
 					}
 
-					if i == coor.I && j == coor.J {
+					if i == coord.I && j == coord.J {
 						continue
 					}
 
-					queue = append(queue, &Coor{i, j})
+					queue = append(queue, &Coordinate{i, j})
+					mask[i][j] = targetVal
+					visitRecord[i][j] = true
 				}
-			}
-		}
-	}
-}
-
-func floodFill(y, x, distance int, grid, mask [][]float64, visitRecord [][]bool, sourceValue, targetValue float64) {
-	visitRecord[y][x] = true
-	mask[y][x] = targetValue
-	// Expand to neighboring pixels only if the source pixel matches the source value
-	if grid[y][x] == sourceValue {
-		for i := y - distance; i <= y+distance; i += 1 {
-			for j := x - distance; j <= x+distance; j += 1 {
-				if i < 0 || i >= len(grid) {
-					continue
-				}
-
-				if j < 0 || j >= len(grid[i]) {
-					continue
-				}
-
-				if visitRecord[i][j] {
-					continue
-				}
-
-				if i == y && j == x {
-					continue
-				}
-
-				floodFill(i, j, distance, grid, mask, visitRecord, grid[y][x], targetValue)
 			}
 		}
 	}

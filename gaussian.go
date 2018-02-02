@@ -48,7 +48,7 @@ func convolve(grid [][]float64, y, x int, kernel [][]float64) float64 {
 	return sum / kernelNorm
 }
 
-func GetGaussianMask(grid [][]float64) [][]float64 {
+func GaussianMasking(grid [][]float64) [][]float64 {
 	maskedGrid := make([][]float64, len(grid))
 	for i := 0; i < len(grid); i += 1 {
 		maskedGrid[i] = make([]float64, len(grid[i]))
@@ -60,9 +60,9 @@ func GetGaussianMask(grid [][]float64) [][]float64 {
 	return maskedGrid
 }
 
-// getPartialGaussianMask is called in the optimized version of gaussian masking. It is called in multiple go routines
+// gaussianMaskingSubroutine is called in the optimized version of gaussian masking. It is called in multiple go routines
 // to achieve parallelism of convolution operation.
-func getPartialGaussianMask(grid [][]float64, n, startRow, endRow int, output chan *PartialGaussianMask) {
+func gaussianMaskingSubroutine(grid [][]float64, n, startRow, endRow int, output chan *PartialGaussianMask) {
 	rowSize := endRow - startRow
 	values := make([][]float64, rowSize)
 	for i := 0; i < rowSize; i += 1 {
@@ -80,17 +80,17 @@ func getPartialGaussianMask(grid [][]float64, n, startRow, endRow int, output ch
 	}
 }
 
-func GetGaussianMaskOptimized(grid [][]float64) [][]float64 {
+func ParallelGaussianMasking(grid [][]float64) [][]float64 {
 	numOfRoutines := 32
 	rowsPerRoutine := len(grid) / numOfRoutines
 	outputChan := make(chan *PartialGaussianMask, numOfRoutines)
 
 	n := 0
 	for n < numOfRoutines-1 {
-		go getPartialGaussianMask(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
+		go gaussianMaskingSubroutine(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
 		n += 1
 	}
-	go getPartialGaussianMask(grid, n, n*rowsPerRoutine, len(grid), outputChan)
+	go gaussianMaskingSubroutine(grid, n, n*rowsPerRoutine, len(grid), outputChan)
 
 	n = 0
 	partialMasks := make([]*PartialGaussianMask, numOfRoutines)
@@ -122,7 +122,7 @@ func CreateGaussianBlurImage(outputDir string, imageName string, img image.Image
 		}
 	}
 
-	maskedGrid := GetGaussianMaskOptimized(pixelGrid)
+	maskedGrid := ParallelGaussianMasking(pixelGrid)
 
 	newImage := image.NewGray(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y += 1 {

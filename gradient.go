@@ -65,8 +65,8 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 		}
 	}
 
-	gaussMask := GetGaussianMaskOptimized(pixelGrid)
-	gradMask := GetGradientMaskOptimized(gaussMask)
+	gaussMask := ParallelGaussianMasking(pixelGrid)
+	gradMask := ParallelGradientMasking(gaussMask)
 	MaximumSuppression(gradMask)
 
 	newImage := image.NewNRGBA(img.Bounds())
@@ -90,26 +90,26 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 	}
 }
 
-func GetGradientMask(grid [][]float64) [][]*Gradient {
+func GradientMasking(grid [][]float64) [][]*Gradient {
 	mask := make([][]*Gradient, len(grid))
 	for i := 0; i < len(grid); i += 1 {
 		mask[i] = make([]*Gradient, len(grid[i]))
 		for j := 0; j < len(grid[i]); j += 1 {
-			mask[i][j] = computeGradient(grid, i, j)
+			mask[i][j] = getGradient(grid, i, j)
 		}
 	}
 
 	return mask
 }
 
-func getPartialGradientMask(grid [][]float64, n, startRow, endRow int, output chan *PartialGradientMask) {
+func gradientMaskingSubroutine(grid [][]float64, n, startRow, endRow int, output chan *PartialGradientMask) {
 	rowSize := endRow - startRow
 	values := make([][]*Gradient, rowSize)
 	for i := 0; i < rowSize; i += 1 {
 		colSize := len(grid[startRow+i])
 		values[i] = make([]*Gradient, colSize)
 		for j := 0; j < colSize; j += 1 {
-			values[i][j] = computeGradient(grid, startRow+i, j)
+			values[i][j] = getGradient(grid, startRow+i, j)
 		}
 	}
 
@@ -120,17 +120,17 @@ func getPartialGradientMask(grid [][]float64, n, startRow, endRow int, output ch
 	}
 }
 
-func GetGradientMaskOptimized(grid [][]float64) [][]*Gradient {
+func ParallelGradientMasking(grid [][]float64) [][]*Gradient {
 	numOfRoutines := 32
 	rowsPerRoutine := len(grid) / numOfRoutines
 	outputChan := make(chan *PartialGradientMask, numOfRoutines)
 
 	n := 0
 	for n < numOfRoutines-1 {
-		go getPartialGradientMask(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
+		go gradientMaskingSubroutine(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
 		n += 1
 	}
-	go getPartialGradientMask(grid, n, n*rowsPerRoutine, len(grid), outputChan)
+	go gradientMaskingSubroutine(grid, n, n*rowsPerRoutine, len(grid), outputChan)
 
 	n = 0
 	partialMasks := make([]*PartialGradientMask, numOfRoutines)
@@ -153,35 +153,35 @@ func GetGradientMaskOptimized(grid [][]float64) [][]*Gradient {
 func MaximumSuppression(mask [][]*Gradient) {
 	for i := 0; i < len(mask); i += 1 {
 		for j := 0; j < len(mask[i]); j += 1 {
-			var forwardPos, backwardPos *Position
+			var forwardPos, backwardPos *Coordinate
 			switch mask[i][j].Dir {
 			case E:
-				forwardPos = &Position{i, j + 1}
-				backwardPos = &Position{i, j - 1}
+				forwardPos = &Coordinate{i, j + 1}
+				backwardPos = &Coordinate{i, j - 1}
 			case NE:
-				forwardPos = &Position{i - 1, j + 1}
-				backwardPos = &Position{i + 1, j - 1}
+				forwardPos = &Coordinate{i - 1, j + 1}
+				backwardPos = &Coordinate{i + 1, j - 1}
 			case N:
-				forwardPos = &Position{i - 1, j}
-				backwardPos = &Position{i + 1, j}
+				forwardPos = &Coordinate{i - 1, j}
+				backwardPos = &Coordinate{i + 1, j}
 			case NW:
-				forwardPos = &Position{i - 1, j - 1}
-				backwardPos = &Position{i + 1, j + 1}
+				forwardPos = &Coordinate{i - 1, j - 1}
+				backwardPos = &Coordinate{i + 1, j + 1}
 			case W:
-				forwardPos = &Position{i, j - 1}
-				backwardPos = &Position{i, j + 1}
+				forwardPos = &Coordinate{i, j - 1}
+				backwardPos = &Coordinate{i, j + 1}
 			case SW:
-				forwardPos = &Position{i + 1, j - 1}
-				backwardPos = &Position{i - 1, j + 1}
+				forwardPos = &Coordinate{i + 1, j - 1}
+				backwardPos = &Coordinate{i - 1, j + 1}
 			case S:
-				forwardPos = &Position{i + 1, j}
-				backwardPos = &Position{i - 1, j}
+				forwardPos = &Coordinate{i + 1, j}
+				backwardPos = &Coordinate{i - 1, j}
 			case SE:
-				forwardPos = &Position{i + 1, j + 1}
-				backwardPos = &Position{i - 1, j - 1}
+				forwardPos = &Coordinate{i + 1, j + 1}
+				backwardPos = &Coordinate{i - 1, j - 1}
 			default:
-				forwardPos = &Position{i, j}
-				backwardPos = &Position{i, j}
+				forwardPos = &Coordinate{i, j}
+				backwardPos = &Coordinate{i, j}
 			}
 
 			if forwardPos.IsOutOfBound(len(mask), len(mask[i])) || backwardPos.IsOutOfBound(len(mask), len(mask[i])) {
@@ -194,7 +194,7 @@ func MaximumSuppression(mask [][]*Gradient) {
 	}
 }
 
-func computeGradient(grid [][]float64, y, x int) *Gradient {
+func getGradient(grid [][]float64, y, x int) *Gradient {
 	grad := &Gradient{
 		X: 0.0,
 		Y: 0.0,

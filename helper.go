@@ -1,16 +1,16 @@
 package main
 
-type Position struct {
+type Coordinate struct {
 	I int
 	J int
 }
 
-func (p *Position) IsOutOfBound(maxRow, maxCol int) bool {
-	if p.I < 0 || p.I >= maxRow {
+func (c *Coordinate) IsOutOfBound(maxRow, maxCol int) bool {
+	if c.I < 0 || c.I >= maxRow {
 		return true
 	}
 
-	if p.J < 0 || p.J >= maxCol {
+	if c.J < 0 || c.J >= maxCol {
 		return true
 	}
 

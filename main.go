@@ -25,7 +25,8 @@ func main() {
 		start := time.Now()
 		// CreateGaussianBlurImage("maps", name, img)
 		// CreateEdgeDetectionImage("maps", name, img)
-		CreateFloodFillImage("maps", name, img)
+		// CreateFloodFillImage("maps", name, img)
+		CreateAutoKeepoutImage("maps", name, img)
 		end := time.Now()
 
 		fmt.Printf("Algorithm took %v to complete \n", end.Sub(start))
