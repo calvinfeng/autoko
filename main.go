@@ -26,7 +26,25 @@ func main() {
 		// CreateGaussianBlurImage("maps", name, img)
 		// CreateEdgeDetectionImage("maps", name, img)
 		// CreateFloodFillImage("maps", name, img)
-		CreateAutoKeepoutImage("maps", name, img)
+		// CreateAutoKeepoutImage("maps", name, img)
+		points := []*Point{
+			{false, 0, 0},
+			{false, 3, 1},
+			{false, 1, 1},
+			{false, 1, 3},
+			{false, 3, 4},
+			{false, 0, 4},
+			{false, 4, 3},
+			{false, -1, 2},
+		}
+
+		LabelHullVertices(points)
+		for _, point := range points {
+			if point.IsHullVertex {
+				fmt.Println(point)
+			}
+		}
+
 		end := time.Now()
 
 		fmt.Printf("Algorithm took %v to complete \n", end.Sub(start))

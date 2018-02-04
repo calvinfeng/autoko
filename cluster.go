@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 // SimpleNearestNeighborClustering performs clustering based on concept of connected component. This function will only
 // look at local maximum gradients with magnitude greater than 255. Two selected gradients are considered neighbors if
 // they are within a certain range.
@@ -22,7 +20,6 @@ func SimpleNearestNeighborClustering(gradGrid [][]*Gradient, neighborRange int) 
 				gradGrid[i][j].ClusterID = clusterID
 				visitRecord[i][j] = true
 				depthFirstNeighborClusterLabel(i, j, clusterID, neighborRange, gradGrid, visitRecord)
-				fmt.Println("Completed labeling group", clusterID)
 				clusterID += 1
 			}
 		}

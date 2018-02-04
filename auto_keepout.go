@@ -8,6 +8,21 @@ import (
 	"os"
 )
 
+var Colors = []color.NRGBA{
+	{255, 0, 0, 255},
+	{255, 125, 0, 255},
+	{255, 255, 0, 255},
+	{125, 255, 0, 255},
+	{0, 255, 0, 255},
+	{0, 255, 125, 255},
+	{0, 255, 255, 255},
+	{0, 125, 255, 255},
+	{0, 0, 255, 255},
+	{125, 0, 255, 255},
+	{255, 0, 255, 255},
+	{255, 0, 125, 255},
+}
+
 func CreateAutoKeepoutImage(outputDir string, imageName string, img image.Image) {
 	maxPoint := img.Bounds().Max
 	minPoint := img.Bounds().Min
@@ -24,14 +39,14 @@ func CreateAutoKeepoutImage(outputDir string, imageName string, img image.Image)
 	gaussMask := ParallelGaussianMasking(wallRemovedMask)
 	gradMask := ParallelGradientMasking(gaussMask)
 	MaximumSuppression(gradMask)
-	SimpleNearestNeighborClustering(gradMask, 5)
+	SimpleNearestNeighborClustering(gradMask, 25)
 
 	newImage := image.NewNRGBA(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
 		for x := minPoint.X; x < maxPoint.X; x += 1 {
 			grad := gradMask[y][x]
 			if grad.IsLocalMax {
-				newImage.Set(x, y, color.NRGBA{255, 0, 0, 255})
+				newImage.Set(x, y, Colors[grad.ClusterID%len(Colors)])
 			} else {
 				val := uint8(wallRemovedMask[y][x])
 				if val < 0 {
