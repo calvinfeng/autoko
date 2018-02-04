@@ -16,6 +16,7 @@ type Gradient struct {
 	X          float64
 	Dir        string
 	IsLocalMax bool
+	ClusterID  int
 }
 
 func (g *Gradient) Magnitude() float64 {
@@ -153,42 +154,43 @@ func ParallelGradientMasking(grid [][]float64) [][]*Gradient {
 func MaximumSuppression(mask [][]*Gradient) {
 	for i := 0; i < len(mask); i += 1 {
 		for j := 0; j < len(mask[i]); j += 1 {
-			var forwardPos, backwardPos *Coordinate
+			var forwardCoord, backwardCoord *Coordinate
 			switch mask[i][j].Dir {
 			case E:
-				forwardPos = &Coordinate{i, j + 1}
-				backwardPos = &Coordinate{i, j - 1}
+				forwardCoord = &Coordinate{i, j + 1}
+				backwardCoord = &Coordinate{i, j - 1}
 			case NE:
-				forwardPos = &Coordinate{i - 1, j + 1}
-				backwardPos = &Coordinate{i + 1, j - 1}
+				forwardCoord = &Coordinate{i - 1, j + 1}
+				backwardCoord = &Coordinate{i + 1, j - 1}
 			case N:
-				forwardPos = &Coordinate{i - 1, j}
-				backwardPos = &Coordinate{i + 1, j}
+				forwardCoord = &Coordinate{i - 1, j}
+				backwardCoord = &Coordinate{i + 1, j}
 			case NW:
-				forwardPos = &Coordinate{i - 1, j - 1}
-				backwardPos = &Coordinate{i + 1, j + 1}
+				forwardCoord = &Coordinate{i - 1, j - 1}
+				backwardCoord = &Coordinate{i + 1, j + 1}
 			case W:
-				forwardPos = &Coordinate{i, j - 1}
-				backwardPos = &Coordinate{i, j + 1}
+				forwardCoord = &Coordinate{i, j - 1}
+				backwardCoord = &Coordinate{i, j + 1}
 			case SW:
-				forwardPos = &Coordinate{i + 1, j - 1}
-				backwardPos = &Coordinate{i - 1, j + 1}
+				forwardCoord = &Coordinate{i + 1, j - 1}
+				backwardCoord = &Coordinate{i - 1, j + 1}
 			case S:
-				forwardPos = &Coordinate{i + 1, j}
-				backwardPos = &Coordinate{i - 1, j}
+				forwardCoord = &Coordinate{i + 1, j}
+				backwardCoord = &Coordinate{i - 1, j}
 			case SE:
-				forwardPos = &Coordinate{i + 1, j + 1}
-				backwardPos = &Coordinate{i - 1, j - 1}
+				forwardCoord = &Coordinate{i + 1, j + 1}
+				backwardCoord = &Coordinate{i - 1, j - 1}
 			default:
-				forwardPos = &Coordinate{i, j}
-				backwardPos = &Coordinate{i, j}
+				forwardCoord = &Coordinate{i, j}
+				backwardCoord = &Coordinate{i, j}
 			}
 
-			if forwardPos.IsOutOfBound(len(mask), len(mask[i])) || backwardPos.IsOutOfBound(len(mask), len(mask[i])) {
+			if forwardCoord.IsOutOfBound(len(mask), len(mask[i])) || backwardCoord.IsOutOfBound(len(mask), len(mask[i])) {
 				mask[i][j].IsLocalMax = false
 			} else {
-				mask[i][j].IsLocalMax = mask[forwardPos.I][forwardPos.J].Magnitude() < mask[i][j].Magnitude() &&
-					mask[backwardPos.I][backwardPos.J].Magnitude() < mask[i][j].Magnitude()
+				isMagLocalMax := mask[forwardCoord.I][forwardCoord.J].Magnitude() < mask[i][j].Magnitude() &&
+					mask[backwardCoord.I][backwardCoord.J].Magnitude() < mask[i][j].Magnitude()
+				mask[i][j].IsLocalMax = isMagLocalMax && mask[i][j].Magnitude() > 255
 			}
 		}
 	}
