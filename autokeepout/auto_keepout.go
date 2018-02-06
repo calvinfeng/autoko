@@ -1,4 +1,4 @@
-package main
+package autokeepout
 
 import (
 	"fmt"
@@ -39,7 +39,8 @@ func CreateAutoKeepoutImage(outputDir string, imageName string, img image.Image)
 	gaussMask := ParallelGaussianMasking(wallRemovedMask)
 	gradMask := ParallelGradientMasking(gaussMask)
 	MaximumSuppression(gradMask)
-	SimpleNearestNeighborClustering(gradMask, 25)
+	SimpleNearestNeighborClustering(gradMask, 10)
+	hullMask := ConvexHullMasking(gradMask)
 
 	newImage := image.NewNRGBA(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
@@ -54,6 +55,12 @@ func CreateAutoKeepoutImage(outputDir string, imageName string, img image.Image)
 				}
 				newImage.Set(x, y, color.NRGBA{val, val, val, 255})
 			}
+		}
+	}
+
+	for i := range hullMask {
+		for j := range hullMask[i] {
+			newImage.Set(j, i, color.NRGBA{255, 0, 0, 255})
 		}
 	}
 

@@ -1,4 +1,4 @@
-package main
+package autokeepout
 
 type MathError struct {
 	Message string

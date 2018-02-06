@@ -1,4 +1,4 @@
-package main
+package autokeepout
 
 type Coordinate struct {
 	I int

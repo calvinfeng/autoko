@@ -1,9 +1,48 @@
-package main
+package autokeepout
 
 import (
 	"fmt"
 	"math"
 )
+
+// ConvexHullMasking returns a boolean map with [i][j] as keys. The boolean value indicates whether point at i, j is a
+// polygon corner.
+func ConvexHullMasking(grads [][]*Gradient) map[int]map[int]bool {
+	hullMask := make(map[int]map[int]bool)
+
+	clusters := make(map[int][]*Point)
+	for i := 0; i < len(grads); i += 1 {
+		for j := 0; j < len(grads[i]); j += 1 {
+			if !grads[i][j].IsLocalMax {
+				continue
+			}
+
+			if _, ok := clusters[grads[i][j].ClusterID]; !ok {
+				clusters[grads[i][j].ClusterID] = []*Point{}
+			}
+
+			clusters[grads[i][j].ClusterID] = append(clusters[grads[i][j].ClusterID], &Point{false, i, j})
+		}
+	}
+
+	for id := range clusters {
+		LabelHullVertices(clusters[id])
+
+		for _, point := range clusters[id] {
+			if !point.IsHullVertex {
+				continue
+			}
+
+			if _, ok := hullMask[point.Y]; !ok {
+				hullMask[point.Y] = make(map[int]bool)
+			}
+
+			hullMask[point.Y][point.X] = true
+		}
+	}
+
+	return hullMask
+}
 
 type Point struct {
 	IsHullVertex bool
