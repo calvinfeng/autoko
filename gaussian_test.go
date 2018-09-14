@@ -5,36 +5,56 @@ import (
 	"testing"
 )
 
-func BenchmarkGaussianMask(b *testing.B) {
-	grid := make([][]float64, 1000)
-	for i := 0; i < len(grid); i++ {
-		grid[i] = make([]float64, 1000)
-		for j := 0; j < len(grid[i]); j++ {
-			grid[i][j] = rand.Float64()
+func randomMat(row, col int) [][]float64 {
+	mat := make([][]float64, row)
+	for i := 0; i < row; i++ {
+		mat[i] = make([]float64, col)
+		for j := 0; j < col; j++ {
+			mat[i][j] = rand.Float64()
 		}
 	}
 
+	return mat
+}
+
+func BenchmarkGaussianMask(b *testing.B) {
+	mat := randomMat(100, 100)
+
 	b.Run("RegularGaussianMask", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			GaussianMasking(grid)
+			GaussianMasking(mat)
 		}
 	})
 
-	b.Run("8ParallelGaussianMask", func(b *testing.B) {
+	b.Run("ParallelGaussianMask with 1 go-routine", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ParallelGaussianMasking(grid, 8)
+			ParallelGaussianMasking(mat, 1)
 		}
 	})
 
-	b.Run("32ParallelGaussianMask", func(b *testing.B) {
+	b.Run("ParallelGaussianMask with 2 go-routines", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ParallelGaussianMasking(grid, 32)
+			ParallelGaussianMasking(mat, 2)
 		}
 	})
 
-	b.Run("128ParallelGaussianMask", func(b *testing.B) {
+	b.Run("ParallelGaussianMask with 4 go-routines", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ParallelGaussianMasking(grid, 128)
+			ParallelGaussianMasking(mat, 4)
 		}
 	})
+
+	b.Run("ParallelGaussianMask with 32 go-routines", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			ParallelGaussianMasking(mat, 32)
+		}
+	})
+}
+
+func BenchmarkConvolve(b *testing.B) {
+	mat := randomMat(10, 10)
+
+	for i := 0; i < b.N; i++ {
+		convolve(mat, 5, 5, GaussianKernel)
+	}
 }
