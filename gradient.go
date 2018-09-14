@@ -66,7 +66,7 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 		}
 	}
 
-	gaussMask := ParallelGaussianMasking(pixelGrid)
+	gaussMask := ParallelGaussianMasking(pixelGrid, 32)
 	gradMask := ParallelGradientMasking(gaussMask)
 	MaximumSuppression(gradMask)
 

@@ -80,24 +80,23 @@ func gaussianMaskingSubroutine(grid [][]float64, n, startRow, endRow int, output
 	}
 }
 
-func ParallelGaussianMasking(grid [][]float64) [][]float64 {
-	numOfRoutines := 32
-	rowsPerRoutine := len(grid) / numOfRoutines
-	outputChan := make(chan *PartialGaussianMask, numOfRoutines)
+func ParallelGaussianMasking(grid [][]float64, numRoutines int) [][]float64 {
+	rowsPerRoutine := len(grid) / numRoutines
+	outputChan := make(chan *PartialGaussianMask, numRoutines)
 
 	n := 0
-	for n < numOfRoutines-1 {
+	for n < numRoutines-1 {
 		go gaussianMaskingSubroutine(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
 		n += 1
 	}
 	go gaussianMaskingSubroutine(grid, n, n*rowsPerRoutine, len(grid), outputChan)
 
 	n = 0
-	partialMasks := make([]*PartialGaussianMask, numOfRoutines)
+	partialMasks := make([]*PartialGaussianMask, numRoutines)
 	for partialMask := range outputChan {
 		partialMasks[partialMask.Order] = partialMask
 		n += 1
-		if n == numOfRoutines {
+		if n == numRoutines {
 			break
 		}
 	}
@@ -122,7 +121,7 @@ func CreateGaussianBlurImage(outputDir string, imageName string, img image.Image
 		}
 	}
 
-	maskedGrid := ParallelGaussianMasking(pixelGrid)
+	maskedGrid := ParallelGaussianMasking(pixelGrid, 32)
 
 	newImage := image.NewGray(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
