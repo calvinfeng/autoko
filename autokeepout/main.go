@@ -1,8 +1,8 @@
 package main
 
 import (
+	"autokeepout"
 	"fmt"
-	"go-auto-keepout/autokeepout"
 	"image"
 	"os"
 	"time"
