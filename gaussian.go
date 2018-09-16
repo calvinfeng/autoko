@@ -54,6 +54,7 @@ func GaussFilter(grid [][]float64, y, x int) float64 {
 	return sum / norm
 }
 
+// GaussianMask applies Gaussian blur to an image matrix.
 func GaussianMask(grid [][]float64) [][]float64 {
 	maskedGrid := make([][]float64, len(grid))
 	for i := 0; i < len(grid); i++ {
@@ -66,9 +67,9 @@ func GaussianMask(grid [][]float64) [][]float64 {
 	return maskedGrid
 }
 
-// GaussianSubmask is called in the optimized version of gaussian masking. It is called in
+// getGaussSubmask is called in the optimized version of gaussian masking. It is called in
 // multiple go routines to achieve parallel convolution operations.
-func GaussianSubmask(grid [][]float64, n, startRow, endRow int, output chan *Submask) {
+func getGaussSubmask(grid [][]float64, n, startRow, endRow int, output chan *Submask) {
 	rowSize := endRow - startRow
 	values := make([][]float64, rowSize)
 	for i := 0; i < rowSize; i++ {
@@ -86,17 +87,19 @@ func GaussianSubmask(grid [][]float64, n, startRow, endRow int, output chan *Sub
 	}
 }
 
+// ParallelGaussianMask applies Gaussian blur to an image matrix using multiple subroutines to
+// achieve parallelism.
 func ParallelGaussianMask(grid [][]float64, numRoutines int) [][]float64 {
 	rowsPerRoutine := len(grid) / numRoutines
 	outputChan := make(chan *Submask, numRoutines)
 
 	n := 0
 	for n < numRoutines-1 {
-		go GaussianSubmask(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
+		go getGaussSubmask(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
 		n++
 	}
 
-	go GaussianSubmask(grid, n, n*rowsPerRoutine, len(grid), outputChan)
+	go getGaussSubmask(grid, n, n*rowsPerRoutine, len(grid), outputChan)
 
 	n = 0
 	submasks := make([]*Submask, numRoutines)
@@ -117,6 +120,8 @@ func ParallelGaussianMask(grid [][]float64, numRoutines int) [][]float64 {
 	return mask
 }
 
+// CreateGaussianBlurImage takes an image and applies Gaussian blur to it. It outputs a blurred
+// image.
 func CreateGaussianBlurImage(outputDir, imageName string, img image.Image) {
 	maxPoint := img.Bounds().Max
 	minPoint := img.Bounds().Min

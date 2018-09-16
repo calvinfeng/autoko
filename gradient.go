@@ -23,6 +23,7 @@ func (g *Gradient) Magnitude() float64 {
 	return math.Sqrt(g.X*g.X + g.Y*g.Y)
 }
 
+// Gradient directions
 const (
 	N  = "NORTH"
 	NE = "NORTH_EAST"
@@ -48,7 +49,7 @@ var Gy = [][]float64{
 	{-1.0, -2.0, -1.0},
 }
 
-type PartialGradientMask struct {
+type GradSubmask struct {
 	Order    int
 	StartRow int
 	Values   [][]*Gradient
@@ -67,7 +68,7 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 	}
 
 	gaussMask := ParallelGaussianMask(pixelGrid, 32)
-	gradMask := ParallelGradientMasking(gaussMask)
+	gradMask := ParallelGradientMask(gaussMask)
 	MaximumSuppression(gradMask)
 
 	newImage := image.NewNRGBA(img.Bounds())
@@ -91,50 +92,51 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 	}
 }
 
-func GradientMasking(grid [][]float64) [][]*Gradient {
-	mask := make([][]*Gradient, len(grid))
-	for i := 0; i < len(grid); i++ {
-		mask[i] = make([]*Gradient, len(grid[i]))
-		for j := 0; j < len(grid[i]); j++ {
-			mask[i][j] = getGradient(grid, i, j)
+// GradientMask takes an image matrix and returns a matrix of gradients.
+func GradientMask(mat [][]float64) [][]*Gradient {
+	mask := make([][]*Gradient, len(mat))
+	for i := 0; i < len(mat); i++ {
+		mask[i] = make([]*Gradient, len(mat[i]))
+		for j := 0; j < len(mat[i]); j++ {
+			mask[i][j] = computeGradient(mat, i, j)
 		}
 	}
 
 	return mask
 }
 
-func gradientMaskingSubroutine(grid [][]float64, n, startRow, endRow int, output chan *PartialGradientMask) {
+func getGradSubmask(mat [][]float64, n, startRow, endRow int, output chan *GradSubmask) {
 	rowSize := endRow - startRow
 	values := make([][]*Gradient, rowSize)
 	for i := 0; i < rowSize; i++ {
-		colSize := len(grid[startRow+i])
+		colSize := len(mat[startRow+i])
 		values[i] = make([]*Gradient, colSize)
 		for j := 0; j < colSize; j++ {
-			values[i][j] = getGradient(grid, startRow+i, j)
+			values[i][j] = computeGradient(mat, startRow+i, j)
 		}
 	}
 
-	output <- &PartialGradientMask{
+	output <- &GradSubmask{
 		Order:    n,
 		StartRow: startRow,
 		Values:   values,
 	}
 }
 
-func ParallelGradientMasking(grid [][]float64) [][]*Gradient {
+func ParallelGradientMask(mat [][]float64) [][]*Gradient {
 	numOfRoutines := 32
-	rowsPerRoutine := len(grid) / numOfRoutines
-	outputChan := make(chan *PartialGradientMask, numOfRoutines)
+	rowsPerRoutine := len(mat) / numOfRoutines
+	outputChan := make(chan *GradSubmask, numOfRoutines)
 
 	n := 0
 	for n < numOfRoutines-1 {
-		go gradientMaskingSubroutine(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
+		go getGradSubmask(mat, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
 		n++
 	}
-	go gradientMaskingSubroutine(grid, n, n*rowsPerRoutine, len(grid), outputChan)
+	go getGradSubmask(mat, n, n*rowsPerRoutine, len(mat), outputChan)
 
 	n = 0
-	partialMasks := make([]*PartialGradientMask, numOfRoutines)
+	partialMasks := make([]*GradSubmask, numOfRoutines)
 	for partialMask := range outputChan {
 		partialMasks[partialMask.Order] = partialMask
 		n++
@@ -196,92 +198,93 @@ func MaximumSuppression(mask [][]*Gradient) {
 	}
 }
 
-func getGradient(grid [][]float64, y, x int) *Gradient {
+func computeGradient(mat [][]float64, y, x int) *Gradient {
 	grad := &Gradient{
 		X: 0.0,
 		Y: 0.0,
 	}
 
-	// When we perform Sobel convolution on the pixel grid, we assume zero padding if it goes out of bound.
+	// When we perform Sobel convolution on the pixel mat, we assume zero padding if it goes out of bound.
 	for i := 0; i < 3; i++ {
 		for j := 0; j < 3; j++ {
 			outOfBound := false
-			if 0 > i+y-1 || len(grid) <= i+y-1 {
+			if 0 > i+y-1 || len(mat) <= i+y-1 {
 				outOfBound = true
 			}
 
-			if 0 > j+x-1 || len(grid[i]) <= j+x-1 {
+			if 0 > j+x-1 || len(mat[i]) <= j+x-1 {
 				outOfBound = true
 			}
 
 			if !outOfBound {
-				grad.Y += Gy[i][j] * grid[i+y-1][j+x-1]
-				grad.X += Gx[i][j] * grid[i+y-1][j+x-1]
+				grad.Y += Gy[i][j] * mat[i+y-1][j+x-1]
+				grad.X += Gx[i][j] * mat[i+y-1][j+x-1]
 			}
 		}
 	}
 
-	// When X is zero, we have a division by zero case here. Sometimes gradient can be zero when there is absolutely no
-	// change within the local region.
-	if grad.X == 0.0 {
-		if grad.Y > 0.0 {
-			grad.Dir = N
-		} else if grad.Y < 0.0 {
-			grad.Dir = S
+	setDirection(grad)
+	return grad
+}
+
+func setDirection(g *Gradient) {
+	if g.X == 0.0 {
+		if g.Y > 0.0 {
+			g.Dir = N
+		} else if g.Y < 0.0 {
+			g.Dir = S
 		}
 
-		return grad
+		return
 	}
 
-	angle := math.Atan2(grad.Y, grad.X)
+	angle := math.Atan2(g.Y, g.X)
 
 	var quadrant int
-	if grad.X > 0.0 && grad.Y >= 0.0 {
+	if g.X > 0.0 && g.Y >= 0.0 {
 		quadrant = 1
-	} else if grad.X < 0.0 && grad.Y >= 0.0 {
+	} else if g.X < 0.0 && g.Y >= 0.0 {
 		quadrant = 2
-	} else if grad.X < 0.0 && grad.Y < 0.0 {
+	} else if g.X < 0.0 && g.Y < 0.0 {
 		quadrant = 3
-	} else if grad.X > 0.0 && grad.Y < 0.0 {
+	} else if g.X > 0.0 && g.Y < 0.0 {
 		quadrant = 4
 	}
 
 	switch quadrant {
 	case 1:
 		if 0 <= angle && angle < math.Pi/8 {
-			grad.Dir = E
+			g.Dir = E
 		} else if math.Pi/8 <= angle && angle < 3*math.Pi/8 {
-			grad.Dir = NE
+			g.Dir = NE
 		} else {
-			grad.Dir = N
+			g.Dir = N
 		}
 	case 2:
 		if math.Pi/2 <= angle && angle < 5*math.Pi/8 {
-			grad.Dir = N
+			g.Dir = N
 		} else if 5*math.Pi/8 < angle && angle < 7*math.Pi/8 {
-			grad.Dir = NW
+			g.Dir = NW
 		} else {
-			grad.Dir = W
+			g.Dir = W
 		}
 	case 3:
 		angle += 2 * math.Pi
 		if math.Pi <= angle && angle < 9*math.Pi/8 {
-			grad.Dir = W
+			g.Dir = W
 		} else if 9*math.Pi/8 <= angle && angle < 11*math.Pi/8 {
-			grad.Dir = SW
+			g.Dir = SW
 		} else {
-			grad.Dir = S
+			g.Dir = S
 		}
 	case 4:
 		angle += 2 * math.Pi
 		if 1.5*math.Pi <= angle && angle < 13*math.Pi/8 {
-			grad.Dir = S
+			g.Dir = S
 		} else if 13*math.Pi/8 <= angle && angle < 15*math.Pi/8 {
-			grad.Dir = SE
+			g.Dir = SE
 		} else {
-			grad.Dir = E
+			g.Dir = E
 		}
 	}
-
-	return grad
 }
