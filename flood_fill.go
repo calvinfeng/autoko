@@ -13,9 +13,9 @@ func CreateFloodFillImage(outputDir string, imageName string, img image.Image) {
 	minPoint := img.Bounds().Min
 
 	pixelGrid := make([][]float64, maxPoint.Y)
-	for i := minPoint.Y; i < maxPoint.Y; i += 1 {
+	for i := minPoint.Y; i < maxPoint.Y; i++ {
 		pixelGrid[i] = make([]float64, maxPoint.X)
-		for j := minPoint.X; j < maxPoint.X; j += 1 {
+		for j := minPoint.X; j < maxPoint.X; j++ {
 			pixelGrid[i][j] = RGBTo8BitGrayScaleIntensity(img.At(j, i))
 		}
 	}
@@ -23,8 +23,8 @@ func CreateFloodFillImage(outputDir string, imageName string, img image.Image) {
 	maskedGrid := FloodFillFromTopLeftCorner(pixelGrid)
 
 	newImage := image.NewGray(img.Bounds())
-	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
-		for x := minPoint.X; x < maxPoint.X; x += 1 {
+	for y := minPoint.Y; y < maxPoint.Y; y++ {
+		for x := minPoint.X; x < maxPoint.X; x++ {
 			val := maskedGrid[y][x]
 			if val < 0.0 {
 				val = 0.0
@@ -46,7 +46,7 @@ func FloodFillFromTopLeftCorner(grid [][]float64) [][]float64 {
 	// Instantiate a mask that is an identical copy of the original grid
 	mask := make([][]float64, len(grid))
 	visitRecord := make([][]bool, len(grid))
-	for i := 0; i < len(grid); i += 1 {
+	for i := 0; i < len(grid); i++ {
 		visitRecord[i] = make([]bool, len(grid[i]))
 		mask[i] = make([]float64, len(grid[i]))
 		copy(mask[i], grid[i])
@@ -71,8 +71,8 @@ func breadthFirstFloodFill(c *Coordinate, dist int, grid, mask [][]float64, visi
 		queue = queue[1:]
 		// Expand to neighboring pixels only if the current pixel on the grid matches the source value
 		if grid[coord.I][coord.J] == srcVal {
-			for i := coord.I - dist; i <= coord.I+dist; i += 1 {
-				for j := coord.J - dist; j <= coord.J+dist; j += 1 {
+			for i := coord.I - dist; i <= coord.I+dist; i++ {
+				for j := coord.J - dist; j <= coord.J+dist; j++ {
 					if i < 0 || i >= len(grid) {
 						continue
 					}

@@ -1,60 +1,85 @@
 package autokeepout
 
 import (
-	"math/rand"
 	"testing"
 )
 
-func randomMat(row, col int) [][]float64 {
-	mat := make([][]float64, row)
-	for i := 0; i < row; i++ {
-		mat[i] = make([]float64, col)
-		for j := 0; j < col; j++ {
-			mat[i][j] = rand.Float64()
-		}
-	}
-
-	return mat
-}
-
 func BenchmarkGaussianMask(b *testing.B) {
-	mat := randomMat(100, 100)
+	m := randomMat(100, 100)
 
 	b.Run("RegularGaussianMask", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			GaussianMasking(mat)
+			GaussianMask(m)
 		}
 	})
 
 	b.Run("ParallelGaussianMask with 1 go-routine", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ParallelGaussianMasking(mat, 1)
+			ParallelGaussianMask(m, 1)
 		}
 	})
 
 	b.Run("ParallelGaussianMask with 2 go-routines", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ParallelGaussianMasking(mat, 2)
+			ParallelGaussianMask(m, 2)
 		}
 	})
 
 	b.Run("ParallelGaussianMask with 4 go-routines", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ParallelGaussianMasking(mat, 4)
+			ParallelGaussianMask(m, 4)
 		}
 	})
 
 	b.Run("ParallelGaussianMask with 32 go-routines", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ParallelGaussianMasking(mat, 32)
+			ParallelGaussianMask(m, 32)
 		}
 	})
 }
 
-func BenchmarkConvolve(b *testing.B) {
-	mat := randomMat(10, 10)
-
-	for i := 0; i < b.N; i++ {
-		convolve(mat, 5, 5, GaussianKernel)
+func TestGaussFilter(t *testing.T) {
+	img := [][]float64{
+		{0, 0, 0, 0, 0},
+		{0, 1, 1, 1, 0},
+		{0, 1, 1, 1, 0},
+		{0, 1, 1, 1, 0},
+		{0, 0, 0, 0, 0},
 	}
+
+	t.Run("ApplyToCenter", func(t *testing.T) {
+		result := GaussFilter(img, 2, 2)
+
+		var expected, norm float64
+		for i := 0; i < KernelSize; i++ {
+			for j := 0; j < KernelSize; j++ {
+				expected += GaussKernel[i][j] * img[i][j]
+				norm += GaussKernel[i][j]
+			}
+		}
+
+		expected /= norm
+
+		if result != expected {
+			t.Errorf("incorrect Gaussian filter result %f", result)
+		}
+	})
+
+	t.Run("ApplyToCorner", func(t *testing.T) {
+		result := GaussFilter(img, 0, 0)
+
+		var expected, norm float64
+		for i := 2; i < KernelSize; i++ {
+			for j := 2; j < KernelSize; j++ {
+				expected += GaussKernel[i][j] * img[i-2][j-2]
+				norm += GaussKernel[i][j]
+			}
+		}
+
+		expected /= norm
+
+		if result != expected {
+			t.Errorf("incorrect Gaussian filter result %f", result)
+		}
+	})
 }

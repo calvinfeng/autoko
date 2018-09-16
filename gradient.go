@@ -59,20 +59,20 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 	minPoint := img.Bounds().Min
 
 	pixelGrid := make([][]float64, maxPoint.Y)
-	for i := minPoint.Y; i < maxPoint.Y; i += 1 {
+	for i := minPoint.Y; i < maxPoint.Y; i++ {
 		pixelGrid[i] = make([]float64, maxPoint.X)
-		for j := minPoint.X; j < maxPoint.X; j += 1 {
+		for j := minPoint.X; j < maxPoint.X; j++ {
 			pixelGrid[i][j] = RGBTo8BitGrayScaleIntensity(img.At(j, i))
 		}
 	}
 
-	gaussMask := ParallelGaussianMasking(pixelGrid, 32)
+	gaussMask := ParallelGaussianMask(pixelGrid, 32)
 	gradMask := ParallelGradientMasking(gaussMask)
 	MaximumSuppression(gradMask)
 
 	newImage := image.NewNRGBA(img.Bounds())
-	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
-		for x := minPoint.X; x < maxPoint.X; x += 1 {
+	for y := minPoint.Y; y < maxPoint.Y; y++ {
+		for x := minPoint.X; x < maxPoint.X; x++ {
 			grad := gradMask[y][x]
 			if grad.IsLocalMax {
 				newImage.Set(x, y, color.NRGBA{255, 0, 0, 255})
@@ -93,9 +93,9 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 
 func GradientMasking(grid [][]float64) [][]*Gradient {
 	mask := make([][]*Gradient, len(grid))
-	for i := 0; i < len(grid); i += 1 {
+	for i := 0; i < len(grid); i++ {
 		mask[i] = make([]*Gradient, len(grid[i]))
-		for j := 0; j < len(grid[i]); j += 1 {
+		for j := 0; j < len(grid[i]); j++ {
 			mask[i][j] = getGradient(grid, i, j)
 		}
 	}
@@ -106,10 +106,10 @@ func GradientMasking(grid [][]float64) [][]*Gradient {
 func gradientMaskingSubroutine(grid [][]float64, n, startRow, endRow int, output chan *PartialGradientMask) {
 	rowSize := endRow - startRow
 	values := make([][]*Gradient, rowSize)
-	for i := 0; i < rowSize; i += 1 {
+	for i := 0; i < rowSize; i++ {
 		colSize := len(grid[startRow+i])
 		values[i] = make([]*Gradient, colSize)
-		for j := 0; j < colSize; j += 1 {
+		for j := 0; j < colSize; j++ {
 			values[i][j] = getGradient(grid, startRow+i, j)
 		}
 	}
@@ -129,7 +129,7 @@ func ParallelGradientMasking(grid [][]float64) [][]*Gradient {
 	n := 0
 	for n < numOfRoutines-1 {
 		go gradientMaskingSubroutine(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
-		n += 1
+		n++
 	}
 	go gradientMaskingSubroutine(grid, n, n*rowsPerRoutine, len(grid), outputChan)
 
@@ -137,7 +137,7 @@ func ParallelGradientMasking(grid [][]float64) [][]*Gradient {
 	partialMasks := make([]*PartialGradientMask, numOfRoutines)
 	for partialMask := range outputChan {
 		partialMasks[partialMask.Order] = partialMask
-		n += 1
+		n++
 		if n == numOfRoutines {
 			break
 		}
@@ -152,8 +152,8 @@ func ParallelGradientMasking(grid [][]float64) [][]*Gradient {
 }
 
 func MaximumSuppression(mask [][]*Gradient) {
-	for i := 0; i < len(mask); i += 1 {
-		for j := 0; j < len(mask[i]); j += 1 {
+	for i := 0; i < len(mask); i++ {
+		for j := 0; j < len(mask[i]); j++ {
 			var forwardCoord, backwardCoord *Coordinate
 			switch mask[i][j].Dir {
 			case E:
@@ -203,8 +203,8 @@ func getGradient(grid [][]float64, y, x int) *Gradient {
 	}
 
 	// When we perform Sobel convolution on the pixel grid, we assume zero padding if it goes out of bound.
-	for i := 0; i < 3; i += 1 {
-		for j := 0; j < 3; j += 1 {
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
 			outOfBound := false
 			if 0 > i+y-1 || len(grid) <= i+y-1 {
 				outOfBound = true

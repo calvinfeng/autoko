@@ -28,23 +28,23 @@ func CreateAutoKeepoutImage(outputDir string, imageName string, img image.Image)
 	minPoint := img.Bounds().Min
 
 	pixelGrid := make([][]float64, maxPoint.Y)
-	for i := minPoint.Y; i < maxPoint.Y; i += 1 {
+	for i := minPoint.Y; i < maxPoint.Y; i++ {
 		pixelGrid[i] = make([]float64, maxPoint.X)
-		for j := minPoint.X; j < maxPoint.X; j += 1 {
+		for j := minPoint.X; j < maxPoint.X; j++ {
 			pixelGrid[i][j] = RGBTo8BitGrayScaleIntensity(img.At(j, i))
 		}
 	}
 
 	wallRemovedMask := FloodFillFromTopLeftCorner(pixelGrid)
-	gaussMask := ParallelGaussianMasking(wallRemovedMask, 32)
+	gaussMask := ParallelGaussianMask(wallRemovedMask, 32)
 	gradMask := ParallelGradientMasking(gaussMask)
 	MaximumSuppression(gradMask)
 	SimpleNearestNeighborClustering(gradMask, 10)
 	hullMask := ConvexHullMasking(gradMask)
 
 	newImage := image.NewNRGBA(img.Bounds())
-	for y := minPoint.Y; y < maxPoint.Y; y += 1 {
-		for x := minPoint.X; x < maxPoint.X; x += 1 {
+	for y := minPoint.Y; y < maxPoint.Y; y++ {
+		for x := minPoint.X; x < maxPoint.X; x++ {
 			grad := gradMask[y][x]
 			if grad.IsLocalMax {
 				newImage.Set(x, y, Colors[grad.ClusterID%len(Colors)])

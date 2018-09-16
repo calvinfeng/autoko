@@ -8,8 +8,15 @@ import (
 	"os"
 )
 
-// GaussianKernel is the matrix that will be applied to convolution operation.
-var GaussianKernel = [][]float64{
+// Kernel attributes, kernel size should always be odd and offset is the always kernel size minus
+// one divide by two.
+const (
+	KernelSize = 5
+	Offset     = (KernelSize - 1) / 2
+)
+
+// GaussKernel is used for applying Gaussian blur to an image.
+var GaussKernel = [][]float64{
 	{2.0, 4.0, 5.0, 4.0, 2.0},
 	{4.0, 9.0, 12.0, 9.0, 4.0},
 	{5.0, 12.0, 15.0, 12.0, 5.0},
@@ -24,54 +31,51 @@ type Submask struct {
 	Values   [][]float64
 }
 
-// Convolve assumes zero padding, i.e. if it is being operated on the corner of a grid, everything
-// that is out of bound is assumed to be zero valued.
-func convolve(grid [][]float64, y, x int, kernel [][]float64) float64 {
-	kernelNorm, sum := 0.0, 0.0
-	for i := 0; i < 5; i++ {
-		for j := 0; j < 5; j++ {
+// GaussFilter assumes zero padding, i.e. if it is being operated on the corner of a grid,
+// everything that is out of bound is assumed to be zero valued.
+func GaussFilter(grid [][]float64, y, x int) float64 {
+	var norm, sum float64
+	for i := 0; i < KernelSize; i++ {
+		for j := 0; j < KernelSize; j++ {
 			// Check if it is out of bound
-			outOfBound := false
-			if 0 > i+y-2 || len(grid) <= i+y-2 {
-				outOfBound = true
+			if 0 > y+i-Offset || len(grid) <= y+i-Offset {
+				continue
 			}
 
-			if 0 > j+x-2 || len(grid[i]) <= j+x-2 {
-				outOfBound = true
+			if 0 > x+j-Offset || len(grid[i]) <= x+j-Offset {
+				continue
 			}
 
-			if !outOfBound {
-				kernelNorm += kernel[i][j]
-				sum += grid[i+y-2][j+x-2] * kernel[i][j]
-			}
+			norm += GaussKernel[i][j]
+			sum += grid[y+i-Offset][x+j-Offset] * GaussKernel[i][j]
 		}
 	}
 
-	return sum / kernelNorm
+	return sum / norm
 }
 
-func GaussianMasking(grid [][]float64) [][]float64 {
+func GaussianMask(grid [][]float64) [][]float64 {
 	maskedGrid := make([][]float64, len(grid))
 	for i := 0; i < len(grid); i++ {
 		maskedGrid[i] = make([]float64, len(grid[i]))
 		for j := 0; j < len(grid[i]); j++ {
-			maskedGrid[i][j] = convolve(grid, i, j, GaussianKernel)
+			maskedGrid[i][j] = GaussFilter(grid, i, j)
 		}
 	}
 
 	return maskedGrid
 }
 
-// gaussSubmaskRoutine is called in the optimized version of gaussian masking. It is called in multiple go routines
-// to achieve parallelism of convolution operation.
-func gaussSubmaskRoutine(grid [][]float64, n, startRow, endRow int, output chan *Submask) {
+// GaussianSubmask is called in the optimized version of gaussian masking. It is called in
+// multiple go routines to achieve parallel convolution operations.
+func GaussianSubmask(grid [][]float64, n, startRow, endRow int, output chan *Submask) {
 	rowSize := endRow - startRow
 	values := make([][]float64, rowSize)
 	for i := 0; i < rowSize; i++ {
 		colSize := len(grid[startRow+i])
 		values[i] = make([]float64, colSize)
 		for j := 0; j < colSize; j++ {
-			values[i][j] = convolve(grid, startRow+i, j, GaussianKernel)
+			values[i][j] = GaussFilter(grid, startRow+i, j)
 		}
 	}
 
@@ -82,17 +86,17 @@ func gaussSubmaskRoutine(grid [][]float64, n, startRow, endRow int, output chan 
 	}
 }
 
-func ParallelGaussianMasking(grid [][]float64, numRoutines int) [][]float64 {
+func ParallelGaussianMask(grid [][]float64, numRoutines int) [][]float64 {
 	rowsPerRoutine := len(grid) / numRoutines
 	outputChan := make(chan *Submask, numRoutines)
 
 	n := 0
 	for n < numRoutines-1 {
-		go gaussSubmaskRoutine(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
+		go GaussianSubmask(grid, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
 		n++
 	}
 
-	go gaussSubmaskRoutine(grid, n, n*rowsPerRoutine, len(grid), outputChan)
+	go GaussianSubmask(grid, n, n*rowsPerRoutine, len(grid), outputChan)
 
 	n = 0
 	submasks := make([]*Submask, numRoutines)
@@ -125,7 +129,7 @@ func CreateGaussianBlurImage(outputDir, imageName string, img image.Image) {
 		}
 	}
 
-	maskedGrid := ParallelGaussianMasking(pixelGrid, 32)
+	maskedGrid := ParallelGaussianMask(pixelGrid, 32)
 
 	newImage := image.NewGray(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y++ {

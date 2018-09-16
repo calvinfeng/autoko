@@ -11,8 +11,8 @@ func ConvexHullMasking(grads [][]*Gradient) map[int]map[int]bool {
 	hullMask := make(map[int]map[int]bool)
 
 	clusters := make(map[int][]*Point)
-	for i := 0; i < len(grads); i += 1 {
-		for j := 0; j < len(grads[i]); j += 1 {
+	for i := 0; i < len(grads); i++ {
+		for j := 0; j < len(grads[i]); j++ {
 			if !grads[i][j].IsLocalMax {
 				continue
 			}
