@@ -50,15 +50,12 @@ func TestGaussFilter(t *testing.T) {
 	t.Run("ApplyToCenter", func(t *testing.T) {
 		result := GaussFilter(img, 2, 2)
 
-		var expected, norm float64
+		var expected float64
 		for i := 0; i < KernelSize; i++ {
 			for j := 0; j < KernelSize; j++ {
 				expected += GaussKernel[i][j] * img[i][j]
-				norm += GaussKernel[i][j]
 			}
 		}
-
-		expected /= norm
 
 		if result != expected {
 			t.Errorf("incorrect Gaussian filter result %f", result)
@@ -68,15 +65,12 @@ func TestGaussFilter(t *testing.T) {
 	t.Run("ApplyToCorner", func(t *testing.T) {
 		result := GaussFilter(img, 0, 0)
 
-		var expected, norm float64
+		var expected float64
 		for i := 2; i < KernelSize; i++ {
 			for j := 2; j < KernelSize; j++ {
 				expected += GaussKernel[i][j] * img[i-2][j-2]
-				norm += GaussKernel[i][j]
 			}
 		}
-
-		expected /= norm
 
 		if result != expected {
 			t.Errorf("incorrect Gaussian filter result %f", result)

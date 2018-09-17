@@ -188,29 +188,36 @@ func NonMaximumSuppression(mask [][]*Gradient, threshold float64) {
 	}
 }
 
-func computeGradient(mat [][]float64, y, x int) *Gradient {
-	grad := &Gradient{
-		X: 0.0,
-		Y: 0.0,
+// Convolve performs convolution on a given location of a matrix. The operation assumes zero padding
+// i.e. the contribution from out of bound region is zero.
+func convolve(mat [][]float64, y, x, kernelSize int, kernel [][]float64) (sum float64) {
+	if kernelSize%2 != 1 {
+		panic("kernel size must be an odd integer")
 	}
 
-	// When we perform Sobel convolution on the pixel mat, we assume zero padding if it goes out of bound.
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 3; j++ {
-			outOfBound := false
-			if 0 > i+y-1 || len(mat) <= i+y-1 {
-				outOfBound = true
-			}
+	offset := (kernelSize - 1) / 2
 
-			if 0 > j+x-1 || len(mat[i]) <= j+x-1 {
-				outOfBound = true
-			}
-
-			if !outOfBound {
-				grad.Y += Gy[i][j] * mat[i+y-1][j+x-1]
-				grad.X += Gx[i][j] * mat[i+y-1][j+x-1]
-			}
+	for i := 0; i < kernelSize; i++ {
+		if y+i-offset < 0 || len(mat) <= y+i-offset {
+			continue
 		}
+
+		for j := 0; j < kernelSize; j++ {
+			if x+j-offset < 0 || len(mat[i]) <= x+j-offset {
+				continue
+			}
+
+			sum += kernel[i][j] * mat[y+i-offset][x+j-offset]
+		}
+	}
+
+	return sum
+}
+
+func computeGradient(mat [][]float64, y, x int) *Gradient {
+	grad := &Gradient{
+		X: convolve(mat, y, x, 3, Gx),
+		Y: convolve(mat, y, x, 3, Gy),
 	}
 
 	grad.setDirection()

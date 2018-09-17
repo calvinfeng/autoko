@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	mapName := "caterpillar"
+	mapName := "fetch_office"
 
 	reader, err := os.Open(fmt.Sprintf("maps/%s.png", mapName))
 	if err != nil {
