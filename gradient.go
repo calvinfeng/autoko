@@ -9,20 +9,6 @@ import (
 	"os"
 )
 
-// Gradient is a vector which has vertical and horizontal component. It also contains a directional component that is
-// quantized to be one of the eight possible choices (N, NE, E, SE, S, SW, W, NW).
-type Gradient struct {
-	Y          float64
-	X          float64
-	Dir        string
-	IsLocalMax bool
-	ClusterID  int
-}
-
-func (g *Gradient) Magnitude() float64 {
-	return math.Sqrt(g.X*g.X + g.Y*g.Y)
-}
-
 // Gradient directions
 const (
 	N  = "NORTH"
@@ -49,7 +35,9 @@ var Gy = [][]float64{
 	{-1.0, -2.0, -1.0},
 }
 
-type GradSubmask struct {
+// GradientSubmask is part of a larger gradient mask that is applied to the whole image.
+// TODO: Combine this with Submask using empty interface for values.
+type GradientSubmask struct {
 	Order    int
 	StartRow int
 	Values   [][]*Gradient
@@ -69,7 +57,7 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 
 	gaussMask := ParallelGaussianMask(pixelGrid, 32)
 	gradMask := ParallelGradientMask(gaussMask)
-	MaximumSuppression(gradMask)
+	NonMaximumSuppression(gradMask, 255)
 
 	newImage := image.NewNRGBA(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y++ {
@@ -105,7 +93,7 @@ func GradientMask(mat [][]float64) [][]*Gradient {
 	return mask
 }
 
-func getGradSubmask(mat [][]float64, n, startRow, endRow int, output chan *GradSubmask) {
+func getGradientSubmask(mat [][]float64, n, startRow, endRow int, output chan *GradientSubmask) {
 	rowSize := endRow - startRow
 	values := make([][]*Gradient, rowSize)
 	for i := 0; i < rowSize; i++ {
@@ -116,7 +104,7 @@ func getGradSubmask(mat [][]float64, n, startRow, endRow int, output chan *GradS
 		}
 	}
 
-	output <- &GradSubmask{
+	output <- &GradientSubmask{
 		Order:    n,
 		StartRow: startRow,
 		Values:   values,
@@ -126,17 +114,17 @@ func getGradSubmask(mat [][]float64, n, startRow, endRow int, output chan *GradS
 func ParallelGradientMask(mat [][]float64) [][]*Gradient {
 	numOfRoutines := 32
 	rowsPerRoutine := len(mat) / numOfRoutines
-	outputChan := make(chan *GradSubmask, numOfRoutines)
+	outputChan := make(chan *GradientSubmask, numOfRoutines)
 
 	n := 0
 	for n < numOfRoutines-1 {
-		go getGradSubmask(mat, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
+		go getGradientSubmask(mat, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
 		n++
 	}
-	go getGradSubmask(mat, n, n*rowsPerRoutine, len(mat), outputChan)
+	go getGradientSubmask(mat, n, n*rowsPerRoutine, len(mat), outputChan)
 
 	n = 0
-	partialMasks := make([]*GradSubmask, numOfRoutines)
+	partialMasks := make([]*GradientSubmask, numOfRoutines)
 	for partialMask := range outputChan {
 		partialMasks[partialMask.Order] = partialMask
 		n++
@@ -153,46 +141,48 @@ func ParallelGradientMask(mat [][]float64) [][]*Gradient {
 	return mask
 }
 
-func MaximumSuppression(mask [][]*Gradient) {
+// NonMaximumSuppression looks at each gradient in the matrix and identifies local maxima. The
+// reason why it is called non-maximum suppression is that it normally sets the gradients to zero if
+// they are not local maxima.
+func NonMaximumSuppression(mask [][]*Gradient, threshold float64) {
 	for i := 0; i < len(mask); i++ {
 		for j := 0; j < len(mask[i]); j++ {
-			var forwardCoord, backwardCoord *Coordinate
+			var forward, backward *Coordinate
 			switch mask[i][j].Dir {
 			case E:
-				forwardCoord = &Coordinate{i, j + 1}
-				backwardCoord = &Coordinate{i, j - 1}
+				forward = &Coordinate{i, j + 1}
+				backward = &Coordinate{i, j - 1}
 			case NE:
-				forwardCoord = &Coordinate{i - 1, j + 1}
-				backwardCoord = &Coordinate{i + 1, j - 1}
+				forward = &Coordinate{i - 1, j + 1}
+				backward = &Coordinate{i + 1, j - 1}
 			case N:
-				forwardCoord = &Coordinate{i - 1, j}
-				backwardCoord = &Coordinate{i + 1, j}
+				forward = &Coordinate{i - 1, j}
+				backward = &Coordinate{i + 1, j}
 			case NW:
-				forwardCoord = &Coordinate{i - 1, j - 1}
-				backwardCoord = &Coordinate{i + 1, j + 1}
+				forward = &Coordinate{i - 1, j - 1}
+				backward = &Coordinate{i + 1, j + 1}
 			case W:
-				forwardCoord = &Coordinate{i, j - 1}
-				backwardCoord = &Coordinate{i, j + 1}
+				forward = &Coordinate{i, j - 1}
+				backward = &Coordinate{i, j + 1}
 			case SW:
-				forwardCoord = &Coordinate{i + 1, j - 1}
-				backwardCoord = &Coordinate{i - 1, j + 1}
+				forward = &Coordinate{i + 1, j - 1}
+				backward = &Coordinate{i - 1, j + 1}
 			case S:
-				forwardCoord = &Coordinate{i + 1, j}
-				backwardCoord = &Coordinate{i - 1, j}
+				forward = &Coordinate{i + 1, j}
+				backward = &Coordinate{i - 1, j}
 			case SE:
-				forwardCoord = &Coordinate{i + 1, j + 1}
-				backwardCoord = &Coordinate{i - 1, j - 1}
+				forward = &Coordinate{i + 1, j + 1}
+				backward = &Coordinate{i - 1, j - 1}
 			default:
-				forwardCoord = &Coordinate{i, j}
-				backwardCoord = &Coordinate{i, j}
+				forward = &Coordinate{i, j}
+				backward = &Coordinate{i, j}
 			}
 
-			if forwardCoord.IsOutOfBound(len(mask), len(mask[i])) || backwardCoord.IsOutOfBound(len(mask), len(mask[i])) {
-				mask[i][j].IsLocalMax = false
-			} else {
-				isMagLocalMax := mask[forwardCoord.I][forwardCoord.J].Magnitude() < mask[i][j].Magnitude() &&
-					mask[backwardCoord.I][backwardCoord.J].Magnitude() < mask[i][j].Magnitude()
-				mask[i][j].IsLocalMax = isMagLocalMax && mask[i][j].Magnitude() > 255
+			numRow, numCol := len(mask), len(mask[i])
+			if forward.IsInBound(numRow, numCol) && backward.IsInBound(numRow, numCol) {
+				mask[i][j].IsLocalMax = mask[forward.I][forward.J].magnitude() < mask[i][j].magnitude() &&
+					mask[backward.I][backward.J].magnitude() < mask[i][j].magnitude() &&
+					mask[i][j].magnitude() > threshold
 			}
 		}
 	}
@@ -223,11 +213,25 @@ func computeGradient(mat [][]float64, y, x int) *Gradient {
 		}
 	}
 
-	setDirection(grad)
+	grad.setDirection()
 	return grad
 }
 
-func setDirection(g *Gradient) {
+// Gradient is a vector which has vertical and horizontal component. It also contains a directional component that is
+// quantized to be one of the eight possible choices (N, NE, E, SE, S, SW, W, NW).
+type Gradient struct {
+	Y          float64
+	X          float64
+	Dir        string
+	IsLocalMax bool
+	ClusterID  int
+}
+
+func (g *Gradient) magnitude() float64 {
+	return math.Sqrt(g.X*g.X + g.Y*g.Y)
+}
+
+func (g *Gradient) setDirection() {
 	if g.X == 0.0 {
 		if g.Y > 0.0 {
 			g.Dir = N

@@ -24,6 +24,17 @@ var GaussKernel = [][]float64{
 	{2.0, 4.0, 5.0, 4.0, 2.0},
 }
 
+// GaussNorm is the sum of all numbers from the Gasussian kernel above.
+var GaussNorm float64
+
+func init() {
+	for i := 0; i < len(GaussKernel); i++ {
+		for j := 0; j < len(GaussKernel[i]); j++ {
+			GaussNorm += GaussKernel[i][j]
+		}
+	}
+}
+
 // Submask is part of a larger mask that is applied to the whole image.
 type Submask struct {
 	Order    int

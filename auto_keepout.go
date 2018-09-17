@@ -38,7 +38,7 @@ func CreateAutoKeepoutImage(outputDir string, imageName string, img image.Image)
 	wallRemovedMask := FloodFillFromTopLeftCorner(pixelGrid)
 	gaussMask := ParallelGaussianMask(wallRemovedMask, 32)
 	gradMask := ParallelGradientMask(gaussMask)
-	MaximumSuppression(gradMask)
+	NonMaximumSuppression(gradMask, 255)
 	SimpleNearestNeighborClustering(gradMask, 10)
 	hullMask := ConvexHullMasking(gradMask)
 

@@ -16,7 +16,7 @@ func TestGradientDirection(t *testing.T) {
 
 	t.Run("Directions", func(t *testing.T) {
 		for expected, g := range cases {
-			setDirection(g)
+			g.setDirection()
 
 			if g.Dir != expected {
 				t.Errorf("graident direction is not %s", expected)
@@ -26,7 +26,7 @@ func TestGradientDirection(t *testing.T) {
 
 	t.Run("DirectionForZeroGrad", func(t *testing.T) {
 		g := &Gradient{}
-		setDirection(g)
+		g.setDirection()
 
 		if g.Dir != "" {
 			t.Error("gradient direction should be zero valued")
@@ -37,24 +37,63 @@ func TestGradientDirection(t *testing.T) {
 		var g *Gradient
 
 		g = &Gradient{X: -0.174, Y: 0.985}
-		setDirection(g)
+		g.setDirection()
 
 		if g.Dir != N {
 			t.Errorf("gradient direction should be %s", N)
 		}
 
 		g = &Gradient{X: -0.731, Y: -0.682}
-		setDirection(g)
+		g.setDirection()
 
 		if g.Dir != SW {
 			t.Errorf("gradient direction should be %s", SW)
 		}
 
 		g = &Gradient{X: 0.961, Y: -0.276}
-		setDirection(g)
+		g.setDirection()
 
 		if g.Dir != E {
 			t.Errorf("gradient direction should be %s", E)
+		}
+	})
+}
+
+func TestNonMaximumSuppression(t *testing.T) {
+	mask := [][]*Gradient{
+		{&Gradient{Y: 1, X: 0}, &Gradient{Y: 1, X: 0}, &Gradient{Y: 1, X: 0}},
+		{&Gradient{Y: 1, X: 0}, &Gradient{Y: 11, X: 0}, &Gradient{Y: 1, X: 0}},
+		{&Gradient{Y: 1, X: 0}, &Gradient{Y: 1, X: 0}, &Gradient{Y: 1, X: 0}},
+	}
+
+	for i := 0; i < len(mask); i++ {
+		for j := 0; j < len(mask); j++ {
+			mask[i][j].setDirection()
+		}
+	}
+
+	NonMaximumSuppression(mask, 10)
+	t.Run("Center", func(t *testing.T) {
+		if !mask[1][1].IsLocalMax {
+			t.Error("gradient at (1, 1) should be a local maximum")
+		}
+	})
+
+	t.Run("Corners", func(t *testing.T) {
+		if mask[0][0].IsLocalMax {
+			t.Error("gradient at (0, 0) should NOT be a local maximum")
+		}
+
+		if mask[2][2].IsLocalMax {
+			t.Error("gradient at (2, 2) should NOT be a local maximum")
+		}
+
+		if mask[0][2].IsLocalMax {
+			t.Error("gradient at (0, 2) should NOT be a local maximum")
+		}
+
+		if mask[2][0].IsLocalMax {
+			t.Error("gradient at (2, 0) should NOT be a local maximum")
 		}
 	})
 }
