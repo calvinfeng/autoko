@@ -37,7 +37,7 @@ func CreateFloodFillImage(outputDir string, imageName string, img image.Image) {
 		}
 	}
 
-	maskedGrid := FloodFillFromTopLeftCorner(pixelGrid)
+	maskedGrid := FloodFillFromTopLeftCorner(pixelGrid, 5, 0.10)
 
 	newImage := image.NewGray(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y++ {
@@ -149,7 +149,7 @@ func CreateAutoKeepoutImage(outputDir string, imageName string, img image.Image)
 		}
 	}
 
-	wallRemovedMask := FloodFillFromTopLeftCorner(pixelGrid)
+	wallRemovedMask := FloodFillFromTopLeftCorner(pixelGrid, 5, 0.10)
 	gaussMask := ParallelGaussianMask(wallRemovedMask, 4)
 	gradMask := ParallelGradientMask(gaussMask, 4)
 	NonMaximumSuppression(gradMask, 255)

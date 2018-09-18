@@ -1,8 +1,22 @@
 package autokeepout
 
+type Coordinate struct {
+	I int
+	J int
+}
+
+// IsInBound indicates whether the coordinate is in bound.
+func (c *Coordinate) IsInBound(maxRow, maxCol int) bool {
+	return (c.I >= 0 && c.I < maxRow) && (c.J >= 0 && c.J < maxCol)
+}
+
+// FloodFillVal is the value for flood filling, if it is 255.0 then it means the image gets flood
+// filled with white.
+const FloodFillVal = 255.0
+
 // FloodFillFromTopLeftCorner uses breadth first approach to flood fill an image to get rid of
 // exterior wall.
-func FloodFillFromTopLeftCorner(mat [][]float64, neighborDist int) [][]float64 {
+func FloodFillFromTopLeftCorner(mat [][]float64, neighborDist int, tolerance float64) [][]float64 {
 	// Instantiate a mask that is an identical copy of the original mat
 	mask := make([][]float64, len(mat))
 	visitRecord := make([][]bool, len(mat))
@@ -14,25 +28,19 @@ func FloodFillFromTopLeftCorner(mat [][]float64, neighborDist int) [][]float64 {
 
 	srcCoord := &Coordinate{0, 0}
 	sourceValue := mat[srcCoord.I][srcCoord.J]
-	targetValue := 255.0
-	breadthFirst(srcCoord, neighborDist, mat, mask, visitRecord, sourceValue, targetValue)
+	breadthFirst(srcCoord, neighborDist, mat, mask, visitRecord, sourceValue, tolerance)
 
 	return mask
 }
 
-func breadthFirst(c *Coordinate, dist int, mat, mask [][]float64, visitRecord [][]bool, srcVal, tgtVal float64) {
-	queue := []*Coordinate{c}
-	mask[c.I][c.J] = tgtVal
-	visitRecord[c.I][c.J] = true
+func breadthFirst(root *Coordinate, dist int, mat, mask [][]float64, visitRecord [][]bool, srcVal, tolerance float64) {
+	queue := []*Coordinate{root}
 	for len(queue) > 0 {
-		coord := queue[0]
+		c := queue[0]
 		queue = queue[1:]
-
-		// Expand to neighboring pixels only if the current pixel on the mat matches the source
-		// value.
-		if mat[coord.I][coord.J] == srcVal {
-			for i := coord.I - dist; i <= coord.I+dist; i++ {
-				for j := coord.J - dist; j <= coord.J+dist; j++ {
+		if srcVal*(1.0-tolerance) <= mat[c.I][c.J] && mat[c.I][c.J] <= srcVal*(1.0+tolerance) {
+			for i := c.I - dist; i <= c.I+dist; i++ {
+				for j := c.J - dist; j <= c.J+dist; j++ {
 					if i < 0 || i >= len(mat) {
 						continue
 					}
@@ -45,13 +53,9 @@ func breadthFirst(c *Coordinate, dist int, mat, mask [][]float64, visitRecord []
 						continue
 					}
 
-					if i == coord.I && j == coord.J {
-						continue
-					}
-
-					queue = append(queue, &Coordinate{i, j})
-					mask[i][j] = tgtVal
+					mask[i][j] = FloodFillVal
 					visitRecord[i][j] = true
+					queue = append(queue, &Coordinate{i, j})
 				}
 			}
 		}
