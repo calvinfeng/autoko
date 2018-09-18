@@ -37,7 +37,7 @@ func CreateFloodFillImage(outputDir string, imageName string, img image.Image) {
 		}
 	}
 
-	maskedGrid := FloodFillFromTopLeftCorner(pixelGrid, 5, 0.10)
+	maskedGrid := FloodFillFromTopLeftCorner(pixelGrid, 5, 0.15)
 
 	newImage := image.NewGray(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y++ {

@@ -26,21 +26,14 @@ func FloodFillFromTopLeftCorner(mat [][]float64, neighborDist int, tolerance flo
 		copy(mask[i], mat[i])
 	}
 
-	srcCoord := &Coordinate{0, 0}
-	sourceValue := mat[srcCoord.I][srcCoord.J]
-	breadthFirst(srcCoord, neighborDist, mat, mask, visitRecord, sourceValue, tolerance)
-
-	return mask
-}
-
-func breadthFirst(root *Coordinate, dist int, mat, mask [][]float64, visitRecord [][]bool, srcVal, tolerance float64) {
-	queue := []*Coordinate{root}
+	srcVal := mat[0][0]
+	queue := []*Coordinate{&Coordinate{0, 0}}
 	for len(queue) > 0 {
 		c := queue[0]
 		queue = queue[1:]
 		if srcVal*(1.0-tolerance) <= mat[c.I][c.J] && mat[c.I][c.J] <= srcVal*(1.0+tolerance) {
-			for i := c.I - dist; i <= c.I+dist; i++ {
-				for j := c.J - dist; j <= c.J+dist; j++ {
+			for i := c.I - neighborDist; i <= c.I+neighborDist; i++ {
+				for j := c.J - neighborDist; j <= c.J+neighborDist; j++ {
 					if i < 0 || i >= len(mat) {
 						continue
 					}
@@ -60,4 +53,6 @@ func breadthFirst(root *Coordinate, dist int, mat, mask [][]float64, visitRecord
 			}
 		}
 	}
+
+	return mask
 }

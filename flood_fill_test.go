@@ -7,7 +7,7 @@ func BenchmarkFloodFill(b *testing.B) {
 
 	b.Run("FloodFillFromTopLeftCorner", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			FloodFillFromTopLeftCorner(m, 20, 10)
+			FloodFillFromTopLeftCorner(m, 5, 0.10)
 		}
 	})
 }
