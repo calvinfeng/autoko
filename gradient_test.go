@@ -2,6 +2,39 @@ package autokeepout
 
 import "testing"
 
+func BenchmarkGradientMask(b *testing.B) {
+	m := randomMat(1000, 1000)
+
+	b.Run("RegularGradientMask", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			GradientMask(m)
+		}
+	})
+
+	b.Run("ParallelGradientMask with 1 go-routine", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			ParallelGradientMask(m, 1)
+		}
+	})
+
+	b.Run("ParallelGradientMask with 2 go-routines", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			ParallelGradientMask(m, 2)
+		}
+	})
+
+	b.Run("ParallelGradientMask with 4 go-routines", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			ParallelGradientMask(m, 4)
+		}
+	})
+
+	b.Run("ParallelGradientMask with 32 go-routines", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			ParallelGradientMask(m, 32)
+		}
+	})
+}
 func TestGradientDirection(t *testing.T) {
 	cases := map[string]*Gradient{
 		N:  &Gradient{X: 0, Y: 1},
@@ -16,7 +49,7 @@ func TestGradientDirection(t *testing.T) {
 
 	t.Run("Directions", func(t *testing.T) {
 		for expected, g := range cases {
-			g.setDirection()
+			g.SetDirection()
 
 			if g.Dir != expected {
 				t.Errorf("graident direction is not %s", expected)
@@ -26,7 +59,7 @@ func TestGradientDirection(t *testing.T) {
 
 	t.Run("DirectionForZeroGrad", func(t *testing.T) {
 		g := &Gradient{}
-		g.setDirection()
+		g.SetDirection()
 
 		if g.Dir != "" {
 			t.Error("gradient direction should be zero valued")
@@ -37,21 +70,21 @@ func TestGradientDirection(t *testing.T) {
 		var g *Gradient
 
 		g = &Gradient{X: -0.174, Y: 0.985}
-		g.setDirection()
+		g.SetDirection()
 
 		if g.Dir != N {
 			t.Errorf("gradient direction should be %s", N)
 		}
 
 		g = &Gradient{X: -0.731, Y: -0.682}
-		g.setDirection()
+		g.SetDirection()
 
 		if g.Dir != SW {
 			t.Errorf("gradient direction should be %s", SW)
 		}
 
 		g = &Gradient{X: 0.961, Y: -0.276}
-		g.setDirection()
+		g.SetDirection()
 
 		if g.Dir != E {
 			t.Errorf("gradient direction should be %s", E)
@@ -68,7 +101,7 @@ func TestNonMaximumSuppression(t *testing.T) {
 
 	for i := 0; i < len(mask); i++ {
 		for j := 0; j < len(mask); j++ {
-			mask[i][j].setDirection()
+			mask[i][j].SetDirection()
 		}
 	}
 

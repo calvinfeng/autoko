@@ -1,12 +1,7 @@
 package autokeepout
 
 import (
-	"fmt"
-	"image"
-	"image/color"
-	"image/png"
 	"math"
-	"os"
 )
 
 // Gradient directions
@@ -35,51 +30,6 @@ var Gy = [][]float64{
 	{-1.0, -2.0, -1.0},
 }
 
-// GradientSubmask is part of a larger gradient mask that is applied to the whole image.
-// TODO: Combine this with Submask using empty interface for values.
-type GradientSubmask struct {
-	Order    int
-	StartRow int
-	Values   [][]*Gradient
-}
-
-func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Image) {
-	maxPoint := img.Bounds().Max
-	minPoint := img.Bounds().Min
-
-	pixelGrid := make([][]float64, maxPoint.Y)
-	for i := minPoint.Y; i < maxPoint.Y; i++ {
-		pixelGrid[i] = make([]float64, maxPoint.X)
-		for j := minPoint.X; j < maxPoint.X; j++ {
-			pixelGrid[i][j] = RGBTo8BitGrayScaleIntensity(img.At(j, i))
-		}
-	}
-
-	gaussMask := ParallelGaussianMask(pixelGrid, 32)
-	gradMask := ParallelGradientMask(gaussMask)
-	NonMaximumSuppression(gradMask, 255)
-
-	newImage := image.NewNRGBA(img.Bounds())
-	for y := minPoint.Y; y < maxPoint.Y; y++ {
-		for x := minPoint.X; x < maxPoint.X; x++ {
-			grad := gradMask[y][x]
-			if grad.IsLocalMax {
-				newImage.Set(x, y, color.NRGBA{255, 0, 0, 255})
-			} else {
-				newImage.Set(x, y, img.At(x, y))
-			}
-		}
-	}
-
-	outputFile, fileErr := os.Create(fmt.Sprintf("%s/%s_edge_detection.png", outputDir, imageName))
-	if fileErr != nil {
-		fmt.Println("Cannot create image")
-	} else {
-		png.Encode(outputFile, newImage)
-		outputFile.Close()
-	}
-}
-
 // GradientMask takes an image matrix and returns a matrix of gradients.
 func GradientMask(mat [][]float64) [][]*Gradient {
 	mask := make([][]*Gradient, len(mat))
@@ -88,54 +38,6 @@ func GradientMask(mat [][]float64) [][]*Gradient {
 		for j := 0; j < len(mat[i]); j++ {
 			mask[i][j] = computeGradient(mat, i, j)
 		}
-	}
-
-	return mask
-}
-
-func getGradientSubmask(mat [][]float64, n, startRow, endRow int, output chan *GradientSubmask) {
-	rowSize := endRow - startRow
-	values := make([][]*Gradient, rowSize)
-	for i := 0; i < rowSize; i++ {
-		colSize := len(mat[startRow+i])
-		values[i] = make([]*Gradient, colSize)
-		for j := 0; j < colSize; j++ {
-			values[i][j] = computeGradient(mat, startRow+i, j)
-		}
-	}
-
-	output <- &GradientSubmask{
-		Order:    n,
-		StartRow: startRow,
-		Values:   values,
-	}
-}
-
-func ParallelGradientMask(mat [][]float64) [][]*Gradient {
-	numOfRoutines := 32
-	rowsPerRoutine := len(mat) / numOfRoutines
-	outputChan := make(chan *GradientSubmask, numOfRoutines)
-
-	n := 0
-	for n < numOfRoutines-1 {
-		go getGradientSubmask(mat, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
-		n++
-	}
-	go getGradientSubmask(mat, n, n*rowsPerRoutine, len(mat), outputChan)
-
-	n = 0
-	partialMasks := make([]*GradientSubmask, numOfRoutines)
-	for partialMask := range outputChan {
-		partialMasks[partialMask.Order] = partialMask
-		n++
-		if n == numOfRoutines {
-			break
-		}
-	}
-
-	mask := [][]*Gradient{}
-	for _, partialMask := range partialMasks {
-		mask = append(mask, partialMask.Values...)
 	}
 
 	return mask
@@ -180,12 +82,80 @@ func NonMaximumSuppression(mask [][]*Gradient, threshold float64) {
 
 			numRow, numCol := len(mask), len(mask[i])
 			if forward.IsInBound(numRow, numCol) && backward.IsInBound(numRow, numCol) {
-				mask[i][j].IsLocalMax = mask[forward.I][forward.J].magnitude() < mask[i][j].magnitude() &&
-					mask[backward.I][backward.J].magnitude() < mask[i][j].magnitude() &&
-					mask[i][j].magnitude() > threshold
+				mask[i][j].IsLocalMax = mask[forward.I][forward.J].Magnitude() < mask[i][j].Magnitude() &&
+					mask[backward.I][backward.J].Magnitude() < mask[i][j].Magnitude() &&
+					mask[i][j].Magnitude() > threshold
 			}
 		}
 	}
+}
+
+// ParallelGradientMask converts a 2D matrix of image intensity to a 2D matrix of image gradient.
+func ParallelGradientMask(mat [][]float64, numRoutines int) [][]*Gradient {
+	rowsPerRoutine := len(mat) / numRoutines
+	outputChan := make(chan *gradientSubmask, numRoutines)
+
+	n := 0
+	for n < numRoutines-1 {
+		go getGradientSubmask(mat, n, n*rowsPerRoutine, (n+1)*rowsPerRoutine, outputChan)
+		n++
+	}
+	go getGradientSubmask(mat, n, n*rowsPerRoutine, len(mat), outputChan)
+
+	n = 0
+	partialMasks := make([]*gradientSubmask, numRoutines)
+	for partialMask := range outputChan {
+		partialMasks[partialMask.Order] = partialMask
+		n++
+		if n == numRoutines {
+			break
+		}
+	}
+
+	mask := [][]*Gradient{}
+	for _, partialMask := range partialMasks {
+		mask = append(mask, partialMask.Values...)
+	}
+
+	return mask
+}
+
+// gradientSubmask is part of a larger gradient mask that is applied to the whole image.
+// TODO: Combine this with Submask using empty interface for values.
+type gradientSubmask struct {
+	Order    int
+	StartRow int
+	Values   [][]*Gradient
+}
+
+func getGradientSubmask(mat [][]float64, n, startRow, endRow int, output chan *gradientSubmask) {
+	rowSize := endRow - startRow
+	values := make([][]*Gradient, rowSize)
+	for i := 0; i < rowSize; i++ {
+		colSize := len(mat[startRow+i])
+		values[i] = make([]*Gradient, colSize)
+		for j := 0; j < colSize; j++ {
+			values[i][j] = computeGradient(mat, startRow+i, j)
+		}
+	}
+
+	output <- &gradientSubmask{
+		Order:    n,
+		StartRow: startRow,
+		Values:   values,
+	}
+}
+
+// ComputeGradient uses Sobel operators to derive gradient value for a given pixel.
+func computeGradient(mat [][]float64, y, x int) *Gradient {
+	grad := &Gradient{
+		X: convolve(mat, y, x, 3, Gx),
+		Y: convolve(mat, y, x, 3, Gy),
+	}
+
+	// SetDirection determines direction of a gradient.
+	grad.SetDirection()
+	return grad
 }
 
 // Convolve performs convolution on a given location of a matrix. The operation assumes zero padding
@@ -214,18 +184,8 @@ func convolve(mat [][]float64, y, x, kernelSize int, kernel [][]float64) (sum fl
 	return sum
 }
 
-func computeGradient(mat [][]float64, y, x int) *Gradient {
-	grad := &Gradient{
-		X: convolve(mat, y, x, 3, Gx),
-		Y: convolve(mat, y, x, 3, Gy),
-	}
-
-	grad.setDirection()
-	return grad
-}
-
-// Gradient is a vector which has vertical and horizontal component. It also contains a directional component that is
-// quantized to be one of the eight possible choices (N, NE, E, SE, S, SW, W, NW).
+// Gradient is a vector which has vertical and horizontal component. It also contains a directional
+// component that is quantized to be one of the eight possible choices (N, NE, E, SE, S, SW, W, NW).
 type Gradient struct {
 	Y          float64
 	X          float64
@@ -234,11 +194,13 @@ type Gradient struct {
 	ClusterID  int
 }
 
-func (g *Gradient) magnitude() float64 {
+// Magnitude returns the magnitude of a gradient.
+func (g *Gradient) Magnitude() float64 {
 	return math.Sqrt(g.X*g.X + g.Y*g.Y)
 }
 
-func (g *Gradient) setDirection() {
+// SetDirection determines direction of a gradient.
+func (g *Gradient) SetDirection() {
 	if g.X == 0.0 {
 		if g.Y > 0.0 {
 			g.Dir = N

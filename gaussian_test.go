@@ -5,7 +5,7 @@ import (
 )
 
 func BenchmarkGaussianMask(b *testing.B) {
-	m := randomMat(100, 100)
+	m := randomMat(1000, 1000)
 
 	b.Run("RegularGaussianMask", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -48,7 +48,7 @@ func TestGaussFilter(t *testing.T) {
 	}
 
 	t.Run("ApplyToCenter", func(t *testing.T) {
-		result := GaussFilter(img, 2, 2)
+		result := gaussFilter(img, 2, 2)
 
 		var expected float64
 		for i := 0; i < KernelSize; i++ {
@@ -63,7 +63,7 @@ func TestGaussFilter(t *testing.T) {
 	})
 
 	t.Run("ApplyToCorner", func(t *testing.T) {
-		result := GaussFilter(img, 0, 0)
+		result := gaussFilter(img, 0, 0)
 
 		var expected float64
 		for i := 2; i < KernelSize; i++ {
