@@ -30,7 +30,8 @@ func main() {
 		// annotate.CreateFloodFillImage("maps", mapName, img)
 		// annotate.CreateGaussianBlurImage("maps", mapName, img)
 		// annotate.CreateEdgeDetectionImage("maps", mapName, img)
-		annotate.CreateAutoKeepoutImage("maps", mapName, img)
+		// annotate.CreateClusteringImage("maps", mapName, img)
+		annotate.CreateConvexHullImage("maps", mapName, img)
 		end := time.Now()
 
 		fmt.Printf("Algorithm took %v to complete \n", end.Sub(start))

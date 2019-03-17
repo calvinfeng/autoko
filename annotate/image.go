@@ -25,7 +25,7 @@ var Colors = []color.NRGBA{
 
 // CreateFloodFillImage takes an image and applies flood fill to it. The output is an image that has
 // exterior wall dissolved.
-func CreateFloodFillImage(outputDir string, imageName string, img image.Image) {
+func CreateFloodFillImage(outputDir, imageName string, img image.Image) {
 	maxPoint := img.Bounds().Max
 	minPoint := img.Bounds().Min
 
@@ -136,10 +136,9 @@ func CreateEdgeDetectionImage(outputDir string, imageName string, img image.Imag
 	}
 }
 
-// CreateAutoKeepoutImage takes an image and performs the whole set of auto keepout algorithm to it.
-// The output is an image with obstacle groupings. The red dots represent the corners of a keepout
-// polygon.
-func CreateAutoKeepoutImage(outputDir string, imageName string, img image.Image) {
+// CreateClusteringImage takes an image and performs the nearest neighbor clustering algorithm to it.
+// The output is an image with different clusters where each cluster is an obstacle.
+func CreateClusteringImage(outputDir, imageName string, img image.Image) {
 	maxPoint := img.Bounds().Max
 	minPoint := img.Bounds().Min
 
@@ -156,7 +155,6 @@ func CreateAutoKeepoutImage(outputDir string, imageName string, img image.Image)
 	gradMask := ParallelGradientMask(gaussMask, 4)
 	NonMaximumSuppression(gradMask, 255)
 	SimpleNearestNeighborClustering(gradMask, 10)
-	hullMask := ConvexHullMasking(gradMask)
 
 	newImage := image.NewNRGBA(img.Bounds())
 	for y := minPoint.Y; y < maxPoint.Y; y++ {
@@ -174,13 +172,66 @@ func CreateAutoKeepoutImage(outputDir string, imageName string, img image.Image)
 		}
 	}
 
-	for i := range hullMask {
-		for j := range hullMask[i] {
-			newImage.Set(j, i, color.NRGBA{255, 0, 0, 255})
+	outputFile, fileErr := os.Create(fmt.Sprintf("%s/%s_clustering.png", outputDir, imageName))
+	if fileErr != nil {
+		fmt.Println("Cannot create image")
+	} else {
+		png.Encode(outputFile, newImage)
+		outputFile.Close()
+	}
+}
+
+// CreateConvexHullImage takes an image and performs the whole set of auto keepout algorithm to it.
+// The output is an image with obstacle groupings. The red dots represent the convex hull corners of
+// a keepout polygon.
+func CreateConvexHullImage(outputDir, imageName string, img image.Image) {
+	maxPoint := img.Bounds().Max
+	minPoint := img.Bounds().Min
+
+	pixelGrid := make([][]float64, maxPoint.Y)
+	for i := minPoint.Y; i < maxPoint.Y; i++ {
+		pixelGrid[i] = make([]float64, maxPoint.X)
+		for j := minPoint.X; j < maxPoint.X; j++ {
+			pixelGrid[i][j] = RGBTo8BitGrayScaleIntensity(img.At(j, i))
 		}
 	}
 
-	outputFile, fileErr := os.Create(fmt.Sprintf("%s/%s_auto_keepout.png", outputDir, imageName))
+	wallRemovedMask := FloodFillFromTopLeftCorner(pixelGrid, 5, 0.10)
+	gaussMask := ParallelGaussianMask(wallRemovedMask, 4)
+	gradMask := ParallelGradientMask(gaussMask, 4)
+	NonMaximumSuppression(gradMask, 255)
+	SimpleNearestNeighborClustering(gradMask, 10)
+
+	newImage := image.NewNRGBA(img.Bounds())
+	for y := minPoint.Y; y < maxPoint.Y; y++ {
+		for x := minPoint.X; x < maxPoint.X; x++ {
+			grad := gradMask[y][x]
+			if grad.IsLocalMax {
+				newImage.Set(x, y, Colors[grad.ClusterID%len(Colors)])
+			} else {
+				val := uint8(gaussMask[y][x])
+				if val < 0 {
+					val = 0
+				}
+				newImage.Set(x, y, color.NRGBA{val, val, val, 255})
+			}
+		}
+	}
+
+	radius := 2
+
+	hullMask := ConvexHullMasking(gradMask)
+	for i := range hullMask {
+		for j := range hullMask[i] {
+			for y := i - radius; y < i+radius; y++ {
+				for x := j - radius; x < j+radius; x++ {
+					newImage.Set(x, y, color.NRGBA{255, 0, 0, 255})
+				}
+			}
+		}
+	}
+
+	outputFile, fileErr := os.Create(fmt.Sprintf("%s/%s_convex_hull.png", outputDir, imageName))
 	if fileErr != nil {
 		fmt.Println("Cannot create image")
 	} else {
