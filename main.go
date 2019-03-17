@@ -1,15 +1,16 @@
 package main
 
 import (
-	"autokeepout"
 	"fmt"
 	"image"
 	"os"
 	"time"
+
+	"github.com/calvinfeng/autoko/annotate"
 )
 
 func main() {
-	mapName := "fetch_office"
+	mapName := "microsoft"
 
 	reader, err := os.Open(fmt.Sprintf("maps/%s.png", mapName))
 	if err != nil {
@@ -26,10 +27,10 @@ func main() {
 		fmt.Printf("Loaded image has the following dimension: %v\n", img.Bounds())
 
 		start := time.Now()
-		// CreateGaussianBlurImage("maps", name, img)
-		// CreateEdgeDetectionImage("maps", name, img)
-		autokeepout.CreateFloodFillImage("maps", mapName, img)
-		// autokeepout.CreateAutoKeepoutImage("maps", mapName, img)
+		// annotate.CreateFloodFillImage("maps", mapName, img)
+		// annotate.CreateGaussianBlurImage("maps", mapName, img)
+		// annotate.CreateEdgeDetectionImage("maps", mapName, img)
+		annotate.CreateAutoKeepoutImage("maps", mapName, img)
 		end := time.Now()
 
 		fmt.Printf("Algorithm took %v to complete \n", end.Sub(start))

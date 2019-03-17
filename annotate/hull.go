@@ -1,12 +1,12 @@
-package autokeepout
+package annotate
 
 import (
 	"fmt"
 	"math"
 )
 
-// ConvexHullMasking returns a boolean map with [i][j] as keys. The boolean value indicates whether point at i, j is a
-// polygon corner.
+// ConvexHullMasking returns a boolean map with [i][j] as keys. The boolean value indicates whether
+// point at i, j is a polygon corner.
 func ConvexHullMasking(grads [][]*Gradient) map[int]map[int]bool {
 	hullMask := make(map[int]map[int]bool)
 
@@ -62,7 +62,8 @@ func LabelHullVertices(points []*Point) {
 	high, low := findHighPointAndLowPoint(points)
 	high.IsHullVertex, low.IsHullVertex = true, true
 
-	// Draw a line with high and low points, and group the points into left/right using the line as a divisor.
+	// Draw a line with high and low points, and group the points into left/right using the line as
+	// a divisor.
 	leftGroup, rightGroup := []*Point{}, []*Point{}
 	for _, point := range points {
 		if point.IsHullVertex {
@@ -71,8 +72,9 @@ func LabelHullVertices(points []*Point) {
 		}
 
 		crossProduct := crossProduct(high, low, point)
-		// Using right-hand rule, points that lie on the right-hand side of the division line has a positive cross product
-		// value, and points that lie on the left-hand side has a negative cross product.
+		// Using right-hand rule, points that lie on the right-hand side of the division line has a
+		// positive cross product value, and points that lie on the left-hand side has a negative
+		// cross product.
 		if crossProduct > 0 {
 			rightGroup = append(rightGroup, point)
 		} else {
@@ -101,8 +103,9 @@ func recursiveLabeling(points []*Point, source, target *Point) {
 
 	farthestAwayPoint.IsHullVertex = true
 
-	// Using source, target, and farthestAwayPoint to create a triangle. Any point that lies inside this triangle can
-	// be discarded because they are for sure not the hull vertices. There will be two candidate set.
+	// Using source, target, and farthestAwayPoint to create a triangle. Any point that lies inside
+	// this triangle can be discarded because they are for sure not the hull vertices. There will be
+	// two candidate set.
 	leftCandidates, rightCandidates := []*Point{}, []*Point{}
 	for _, point := range points {
 		if point.IsHullVertex {
@@ -126,9 +129,9 @@ func recursiveLabeling(points []*Point, source, target *Point) {
 	recursiveLabeling(rightCandidates, source, farthestAwayPoint)
 }
 
-// findHighPointAndLowPoint returns two points that are highest and lowest in a set of points. Highest indicates that
-// it has the minimum y-value because grid coordinates are upside-down from cartesian coordinate. Lowest indicates that
-// it has the maximum y-value.
+// findHighPointAndLowPoint returns two points that are highest and lowest in a set of points.
+// Highest indicates that it has the minimum y-value because grid coordinates are upside-down from
+// cartesian coordinate. Lowest indicates that it has the maximum y-value.
 func findHighPointAndLowPoint(points []*Point) (high, low *Point) {
 	if len(points) == 0 {
 		return nil, nil
@@ -146,8 +149,8 @@ func findHighPointAndLowPoint(points []*Point) (high, low *Point) {
 	return high, low
 }
 
-// Source and target points form a line. perpendicularDistanceFromLine returns the distance from the point to the line
-// that was formed by source and target.
+// Source and target points form a line. perpendicularDistanceFromLine returns the distance from the
+// point to the line that was formed by source and target.
 func perpendicularDistanceFromLine(source, target, point *Point) float64 {
 	temp := (target.Y - source.Y) * point.X
 	temp -= (target.X - source.X) * point.Y

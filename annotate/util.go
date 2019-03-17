@@ -1,4 +1,4 @@
-package autokeepout
+package annotate
 
 import (
 	"image/color"

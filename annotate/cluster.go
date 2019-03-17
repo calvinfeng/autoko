@@ -1,4 +1,4 @@
-package autokeepout
+package annotate
 
 // SimpleNearestNeighborClustering performs clustering based on concept of connected component. This function will only
 // look at local maximum gradients with magnitude greater than 255. Two selected gradients are considered neighbors if

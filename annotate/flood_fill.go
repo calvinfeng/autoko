@@ -1,4 +1,4 @@
-package autokeepout
+package annotate
 
 type Coordinate struct {
 	I int

@@ -1,4 +1,4 @@
-package autokeepout
+package annotate
 
 // Kernel attributes, kernel size should always be odd and offset is the always kernel size minus
 // one divide by two.

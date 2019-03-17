@@ -1,4 +1,4 @@
-package autokeepout
+package annotate
 
 import "testing"
 
